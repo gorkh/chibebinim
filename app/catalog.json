@@ -1,0 +1,763 @@
+[
+  {
+    "source": "fixture",
+    "external_id": "one-day-series-2024",
+    "source_url": "https://www.netflix.com/title/81256740",
+    "media_type": "tv",
+    "title": "One Day",
+    "original_title": "One Day",
+    "release_year": 2024,
+    "genres": ["romance", "drama"],
+    "overview_fa": "اما و دکستر شب فارغ‌التحصیلی همدیگر را می‌بینند. مسیر زندگی‌شان جدا می‌شود، اما رابطه‌شان در سال‌های بعد ادامه پیدا می‌کند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "crash-landing-on-you-2019",
+    "source_url": "https://www.netflix.com/title/81159258",
+    "media_type": "tv",
+    "title": "Crash Landing on You",
+    "original_title": "사랑의 불시착",
+    "release_year": 2019,
+    "genres": ["romance", "drama", "comedy"],
+    "overview_fa": "یک حادثهٔ پاراگلایدر زنی از کرهٔ جنوبی را به کرهٔ شمالی می‌کشاند و افسری محلی به او کمک می‌کند پنهان شود.",
+    "original_language": "ko"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt1375666",
+    "source_url": "https://www.imdb.com/title/tt1375666/",
+    "media_type": "movie",
+    "title": "Inception",
+    "original_title": "Inception",
+    "persian_title": "تلقین",
+    "release_year": 2010,
+    "runtime_minutes": 148,
+    "genres": [
+      "action",
+      "science_fiction",
+      "thriller"
+    ],
+    "overview_fa": "دزدی که در رؤیاها دنبال اسرار می‌گردد، این بار باید به‌جای ربودن یک ایده، آن را در ذهن کسی بکارد.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0816692",
+    "source_url": "https://www.imdb.com/title/tt0816692/",
+    "media_type": "movie",
+    "title": "Interstellar",
+    "original_title": "Interstellar",
+    "persian_title": "میان‌ستاره‌ای",
+    "release_year": 2014,
+    "runtime_minutes": 169,
+    "genres": [
+      "adventure",
+      "drama",
+      "science_fiction"
+    ],
+    "overview_fa": "گروهی از فضانوردان برای پیدا کردن خانه‌ای تازه برای انسان‌ها، به سفری دور از زمین می‌روند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0482571",
+    "source_url": "https://www.imdb.com/title/tt0482571/",
+    "media_type": "movie",
+    "title": "The Prestige",
+    "original_title": "The Prestige",
+    "persian_title": "پرستیژ",
+    "release_year": 2006,
+    "runtime_minutes": 130,
+    "genres": [
+      "drama",
+      "mystery",
+      "science_fiction"
+    ],
+    "overview_fa": "رقابت دو شعبده‌باز برای ساختن اجرای بی‌نقص، به‌تدریج زندگی هر دو را درگیر می‌کند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt1392214",
+    "source_url": "https://www.imdb.com/title/tt1392214/",
+    "media_type": "movie",
+    "title": "Prisoners",
+    "original_title": "Prisoners",
+    "persian_title": "زندانیان",
+    "release_year": 2013,
+    "runtime_minutes": 153,
+    "genres": [
+      "crime",
+      "drama",
+      "mystery",
+      "thriller"
+    ],
+    "overview_fa": "با ناپدید شدن دو دختر، یک کارآگاه و پدر یکی از آن‌ها از دو مسیر متفاوت دنبال سرنخ می‌گردند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt8946378",
+    "source_url": "https://www.imdb.com/title/tt8946378/",
+    "media_type": "movie",
+    "title": "Knives Out",
+    "original_title": "Knives Out",
+    "persian_title": "چاقوکشی",
+    "release_year": 2019,
+    "runtime_minutes": 130,
+    "genres": [
+      "comedy",
+      "crime",
+      "drama",
+      "mystery",
+      "thriller"
+    ],
+    "overview_fa": "بعد از مرگ یک نویسندهٔ مشهور، کارآگاهی از اعضای خانوادهٔ او دربارهٔ آخرین شب زندگی‌اش سؤال می‌کند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0365748",
+    "source_url": "https://www.imdb.com/title/tt0365748/",
+    "media_type": "movie",
+    "title": "Shaun of the Dead",
+    "original_title": "Shaun of the Dead",
+    "persian_title": "شان می‌میرد",
+    "release_year": 2004,
+    "runtime_minutes": 99,
+    "genres": [
+      "comedy",
+      "horror"
+    ],
+    "overview_fa": "با هجوم زامبی‌ها، یک فروشندهٔ معمولی و دوستش برای نجات نزدیکانشان دست به کار می‌شوند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0097814",
+    "source_url": "https://www.imdb.com/title/tt0097814/",
+    "media_type": "movie",
+    "title": "Kiki's Delivery Service",
+    "original_title": "魔女の宅急便",
+    "persian_title": "سرویس تحویل کیکی",
+    "release_year": 1989,
+    "runtime_minutes": 103,
+    "genres": [
+      "animation",
+      "family",
+      "fantasy",
+      "adventure"
+    ],
+    "overview_fa": "جادوگری نوجوان به شهری ساحلی می‌رود تا مستقل زندگی کند و با جارویش بسته‌ها را برساند.",
+    "original_language": "ja"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0112471",
+    "source_url": "https://www.imdb.com/title/tt0112471/",
+    "media_type": "movie",
+    "title": "Before Sunrise",
+    "original_title": "Before Sunrise",
+    "persian_title": "پیش از طلوع",
+    "release_year": 1995,
+    "runtime_minutes": 101,
+    "genres": [
+      "drama",
+      "romance"
+    ],
+    "overview_fa": "دو مسافر جوان در قطار آشنا می‌شوند و تصمیم می‌گیرند یک شب را با هم در وین بگذرانند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt2582802",
+    "source_url": "https://www.imdb.com/title/tt2582802/",
+    "media_type": "movie",
+    "title": "Whiplash",
+    "original_title": "Whiplash",
+    "persian_title": "ویپلش",
+    "release_year": 2014,
+    "runtime_minutes": 106,
+    "genres": [
+      "drama",
+      "music"
+    ],
+    "overview_fa": "نوازنده‌ای جوان برای پیشرفت در موسیقی، به کلاس استادی سخت‌گیر می‌پیوندد.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0457430",
+    "source_url": "https://www.imdb.com/title/tt0457430/",
+    "media_type": "movie",
+    "title": "Pan's Labyrinth",
+    "original_title": "El laberinto del fauno",
+    "persian_title": "هزارتوی پن",
+    "release_year": 2006,
+    "runtime_minutes": 118,
+    "genres": [
+      "drama",
+      "fantasy",
+      "war"
+    ],
+    "overview_fa": "دختری در اسپانیای پس از جنگ داخلی به هزارتویی می‌رسد که راهی به دنیایی دیگر پیش پایش می‌گذارد.",
+    "original_language": "es"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0133093",
+    "source_url": "https://www.imdb.com/title/tt0133093/",
+    "media_type": "movie",
+    "title": "The Matrix",
+    "original_title": "The Matrix",
+    "persian_title": "ماتریکس",
+    "release_year": 1999,
+    "runtime_minutes": 136,
+    "genres": [
+      "action",
+      "science_fiction"
+    ],
+    "overview_fa": "برنامه‌نویسی جوان با گروهی روبه‌رو می‌شود که نگاهش به واقعیت را تغییر می‌دهند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0379786",
+    "source_url": "https://www.imdb.com/title/tt0379786/",
+    "media_type": "movie",
+    "title": "Serenity",
+    "original_title": "Serenity",
+    "persian_title": "سرنیتی",
+    "release_year": 2005,
+    "runtime_minutes": 119,
+    "genres": [
+      "action",
+      "adventure",
+      "science_fiction",
+      "thriller"
+    ],
+    "overview_fa": "خدمهٔ یک سفینه سعی می‌کنند از سرنشینی محافظت کنند که قدرت حاکم به دنبال اوست.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0111257",
+    "source_url": "https://www.imdb.com/title/tt0111257/",
+    "media_type": "movie",
+    "title": "Speed",
+    "original_title": "Speed",
+    "persian_title": "سرعت",
+    "release_year": 1994,
+    "runtime_minutes": 116,
+    "genres": [
+      "action",
+      "adventure",
+      "thriller"
+    ],
+    "overview_fa": "یک مأمور باید راهی برای نجات مسافران اتوبوسی پیدا کند که نمی‌تواند سرعتش را کم کند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0111161",
+    "source_url": "https://www.imdb.com/title/tt0111161/",
+    "media_type": "movie",
+    "title": "The Shawshank Redemption",
+    "original_title": "The Shawshank Redemption",
+    "persian_title": "رستگاری در شاوشنک",
+    "release_year": 1994,
+    "runtime_minutes": 142,
+    "genres": [
+      "drama"
+    ],
+    "overview_fa": "بانکداری که به زندان افتاده، با یکی از زندانیان قدیمی دوست می‌شود.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0093779",
+    "source_url": "https://www.imdb.com/title/tt0093779/",
+    "media_type": "movie",
+    "title": "The Princess Bride",
+    "original_title": "The Princess Bride",
+    "persian_title": "عروس شاهزاده",
+    "release_year": 1987,
+    "runtime_minutes": 98,
+    "genres": [
+      "adventure",
+      "comedy",
+      "family",
+      "fantasy",
+      "romance"
+    ],
+    "overview_fa": "پدربزرگی برای نوه‌اش داستان عاشقانه‌ای پر از شمشیربازی و ماجراجویی می‌خواند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0804503",
+    "source_url": "https://www.imdb.com/title/tt0804503/",
+    "media_type": "tv",
+    "title": "Mad Men",
+    "original_title": "Mad Men",
+    "persian_title": "مردان دیوانه",
+    "release_year": 2007,
+    "seasons_count": 7,
+    "episodes_count": 92,
+    "genres": [
+      "drama"
+    ],
+    "overview_fa": "زندگی کارکنان یک آژانس تبلیغاتی در نیویورک دههٔ شصت میلادی، در محل کار و بیرون از آن دنبال می‌شود.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt5753856",
+    "source_url": "https://www.imdb.com/title/tt5753856/",
+    "media_type": "tv",
+    "title": "Dark",
+    "original_title": "Dark",
+    "persian_title": "دارک",
+    "release_year": 2017,
+    "seasons_count": 3,
+    "episodes_count": 26,
+    "genres": [
+      "crime",
+      "drama",
+      "mystery",
+      "science_fiction",
+      "thriller"
+    ],
+    "overview_fa": "ناپدید شدن یک نوجوان، خانواده‌های یک شهر کوچک آلمانی را به جست‌وجوی پاسخ می‌کشاند.",
+    "original_language": "de"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt7366338",
+    "source_url": "https://www.imdb.com/title/tt7366338/",
+    "media_type": "tv",
+    "title": "Chernobyl",
+    "original_title": "Chernobyl",
+    "persian_title": "چرنوبیل",
+    "release_year": 2019,
+    "seasons_count": 1,
+    "episodes_count": 5,
+    "genres": [
+      "drama",
+      "history"
+    ],
+    "overview_fa": "مینی‌سریالی دربارهٔ حادثهٔ نیروگاه چرنوبیل و کسانی که برای مهار پیامدهایش تلاش کردند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt9243804",
+    "source_url": "https://www.imdb.com/title/tt9243804/",
+    "media_type": "tv",
+    "title": "The Haunting of Bly Manor",
+    "original_title": "The Haunting of Bly Manor",
+    "persian_title": "تسخیر عمارت بلای",
+    "release_year": 2020,
+    "seasons_count": 1,
+    "episodes_count": 9,
+    "genres": [
+      "drama",
+      "horror",
+      "mystery",
+      "romance"
+    ],
+    "overview_fa": "پرستاری جوان برای مراقبت از دو کودک به عمارتی دورافتاده در انگلستان می‌رود.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0472954",
+    "source_url": "https://www.imdb.com/title/tt0472954/",
+    "media_type": "tv",
+    "title": "It’s Always Sunny in Philadelphia",
+    "original_title": "It’s Always Sunny in Philadelphia",
+    "persian_title": "فیلادلفیا همیشه آفتابی است",
+    "release_year": 2005,
+    "genres": [
+      "comedy"
+    ],
+    "overview_fa": "چند دوست که با هم یک بار را می‌گردانند، مدام درگیر نقشه‌های عجیب خودشان می‌شوند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt2356777",
+    "source_url": "https://www.imdb.com/title/tt2356777/",
+    "media_type": "tv",
+    "title": "True Detective",
+    "original_title": "True Detective",
+    "persian_title": "کارآگاه حقیقی",
+    "release_year": 2014,
+    "genres": [
+      "crime",
+      "drama",
+      "mystery",
+      "thriller"
+    ],
+    "overview_fa": "در هر فصل، گروهی از کارآگاهان پرونده‌ای جنایی و پیامدهایش را دنبال می‌کنند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt11280740",
+    "source_url": "https://www.imdb.com/title/tt11280740/",
+    "media_type": "tv",
+    "title": "Severance",
+    "original_title": "Severance",
+    "persian_title": "جداسازی",
+    "release_year": 2022,
+    "genres": [
+      "drama",
+      "mystery",
+      "science_fiction",
+      "thriller"
+    ],
+    "overview_fa": "در شرکتی مرموز، کارمندانی که خاطرات محل کار و زندگی خصوصی‌شان جدا شده به ماهیت کارشان شک می‌کنند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt2442560",
+    "source_url": "https://www.imdb.com/title/tt2442560/",
+    "media_type": "tv",
+    "title": "Peaky Blinders",
+    "original_title": "Peaky Blinders",
+    "persian_title": "پیکی بلایندرز",
+    "release_year": 2013,
+    "seasons_count": 6,
+    "episodes_count": 36,
+    "genres": [
+      "crime",
+      "drama"
+    ],
+    "overview_fa": "یک خانوادهٔ تبهکار در بیرمنگام پس از جنگ جهانی اول دنبال گسترش نفوذش است.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt9813792",
+    "source_url": "https://www.imdb.com/title/tt9813792/",
+    "media_type": "tv",
+    "title": "From",
+    "original_title": "From",
+    "persian_title": "از",
+    "release_year": 2022,
+    "genres": [
+      "drama",
+      "horror",
+      "mystery",
+      "science_fiction",
+      "thriller"
+    ],
+    "overview_fa": "مسافرانی که وارد شهری کوچک می‌شوند، می‌فهمند راهی برای بیرون رفتن پیدا نمی‌کنند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0944947",
+    "source_url": "https://www.imdb.com/title/tt0944947/",
+    "media_type": "tv",
+    "title": "Game of Thrones",
+    "original_title": "Game of Thrones",
+    "persian_title": "بازی تاج‌وتخت",
+    "release_year": 2011,
+    "seasons_count": 8,
+    "episodes_count": 73,
+    "genres": [
+      "action",
+      "adventure",
+      "drama",
+      "fantasy"
+    ],
+    "overview_fa": "خاندان‌های چند سرزمین برای قدرت رقابت می‌کنند و تهدیدی در شمال شکل می‌گیرد.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt18335752",
+    "source_url": "https://www.imdb.com/title/tt18335752/",
+    "media_type": "tv",
+    "title": "Shōgun",
+    "original_title": "Shōgun",
+    "persian_title": "شوگون",
+    "release_year": 2024,
+    "genres": [
+      "adventure",
+      "drama",
+      "history"
+    ],
+    "overview_fa": "ورود یک دریانورد انگلیسی به ژاپن، او را وارد کشمکش‌های سیاسی چند خاندان می‌کند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt10048342",
+    "source_url": "https://www.imdb.com/title/tt10048342/",
+    "media_type": "tv",
+    "title": "The Queen's Gambit",
+    "original_title": "The Queen's Gambit",
+    "persian_title": "گامبی وزیر",
+    "release_year": 2020,
+    "seasons_count": 1,
+    "episodes_count": 7,
+    "genres": [
+      "drama"
+    ],
+    "overview_fa": "دختری با استعداد شطرنج وارد رقابت‌هایی می‌شود که مسیر زندگی‌اش را عوض می‌کنند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt4052886",
+    "source_url": "https://www.imdb.com/title/tt4052886/",
+    "media_type": "tv",
+    "title": "Lucifer",
+    "original_title": "Lucifer",
+    "persian_title": "لوسیفر",
+    "release_year": 2016,
+    "seasons_count": 6,
+    "episodes_count": 93,
+    "genres": [
+      "crime",
+      "drama",
+      "fantasy",
+      "romance"
+    ],
+    "overview_fa": "لوسیفر به لس‌آنجلس می‌رود و همکاری غیرمنتظره‌ای با یک کارآگاه پلیس پیدا می‌کند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt0386676",
+    "source_url": "https://www.imdb.com/title/tt0386676/",
+    "media_type": "tv",
+    "title": "The Office",
+    "original_title": "The Office",
+    "persian_title": "اداره",
+    "release_year": 2005,
+    "seasons_count": 9,
+    "episodes_count": 201,
+    "genres": [
+      "comedy"
+    ],
+    "overview_fa": "گروهی مستندساز روزهای کاری کارمندان یک شرکت فروش کاغذ را ثبت می‌کند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt26996640",
+    "source_url": "https://www.imdb.com/title/tt26996640/",
+    "media_type": "tv",
+    "title": "Dept. Q",
+    "original_title": "Dept. Q",
+    "persian_title": "دپارتمان کیو",
+    "release_year": 2025,
+    "genres": [
+      "crime",
+      "drama",
+      "mystery",
+      "thriller"
+    ],
+    "overview_fa": "یک کارآگاه در ادینبرا با گروهی تازه به سراغ پرونده‌های حل‌نشده می‌رود.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt24053860",
+    "source_url": "https://www.imdb.com/title/tt24053860/",
+    "media_type": "tv",
+    "title": "Eric",
+    "original_title": "Eric",
+    "persian_title": "اریک",
+    "release_year": 2024,
+    "seasons_count": 1,
+    "episodes_count": 6,
+    "genres": [
+      "crime",
+      "drama",
+      "thriller"
+    ],
+    "overview_fa": "عروسک‌گردانی در نیویورک پس از گم‌شدن پسرش دنبال راهی برای پیدا کردن او می‌گردد.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt2085059",
+    "source_url": "https://www.imdb.com/title/tt2085059/",
+    "media_type": "tv",
+    "title": "Black Mirror",
+    "original_title": "Black Mirror",
+    "persian_title": "آینهٔ سیاه",
+    "release_year": 2011,
+    "genres": [
+      "drama",
+      "science_fiction",
+      "thriller"
+    ],
+    "overview_fa": "مجموعه‌ای از داستان‌های مستقل دربارهٔ فناوری و رابطهٔ آدم‌ها با آن.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt2861424",
+    "source_url": "https://www.imdb.com/title/tt2861424/",
+    "media_type": "tv",
+    "title": "Rick and Morty",
+    "original_title": "Rick and Morty",
+    "persian_title": "ریک و مورتی",
+    "release_year": 2013,
+    "genres": [
+      "animation",
+      "adventure",
+      "comedy",
+      "science_fiction"
+    ],
+    "overview_fa": "دانشمندی عجیب و نوه‌اش از دنیاهای مختلف سر درمی‌آورند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt2866360",
+    "source_url": "https://sitgesfilmfestival.com/en/film/2013/coherence",
+    "media_type": "movie",
+    "title": "Coherence",
+    "original_title": "Coherence",
+    "persian_title": "همدوسی",
+    "release_year": 2013,
+    "runtime_minutes": 89,
+    "genres": ["science_fiction", "mystery", "thriller"],
+    "overview_fa": "با عبور یک دنباله‌دار، اتفاق‌هایی غیرعادی مهمانی شام چند دوست را به هم می‌زند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "tt10155688",
+    "source_url": "https://press.wbd.com/na/property/mare-easttown",
+    "media_type": "tv",
+    "title": "Mare of Easttown",
+    "original_title": "Mare of Easttown",
+    "persian_title": "میر اهل ایست‌تاون",
+    "release_year": 2021,
+    "seasons_count": 1,
+    "episodes_count": 7,
+    "genres": ["crime", "drama", "mystery"],
+    "overview_fa": "کارآگاهی در شهری کوچک در پنسیلوانیا، هم‌زمان با مشکلات زندگی خودش، پروندهٔ یک قتل را بررسی می‌کند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "scavengers-reign",
+    "source_url": "https://press.wbd.com/na/property/scavengers-reign",
+    "media_type": "tv",
+    "title": "Scavengers Reign",
+    "original_title": "Scavengers Reign",
+    "aliases": ["Scavenger's Reign", "Reign Scavenger's"],
+    "release_year": 2023,
+    "genres": ["animation", "science_fiction", "adventure", "drama"],
+    "themes": ["بقا در محیط خصمانه", "جهانی با زیست‌بوم غریب", "کشف جهان ناشناخته"],
+    "overview_fa": "بازمانده‌های یک سفینهٔ باری باید در سیاره‌ای غریب و خطرناک راهی برای زنده ماندن پیدا کنند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "nausicaa-of-the-valley-of-the-wind",
+    "source_url": "https://gkids.com/films/nausicaa-of-the-valley-of-the-wind/",
+    "media_type": "movie",
+    "title": "Nausicaä of the Valley of the Wind",
+    "original_title": "風の谷のナウシカ",
+    "persian_title": "نائوشیکا از درهٔ باد",
+    "release_year": 1984,
+    "genres": ["animation", "science_fiction", "adventure", "fantasy"],
+    "themes": ["بقا در محیط خصمانه", "جهانی با زیست‌بوم غریب"],
+    "overview_fa": "در جهانی گرفتار جنگل‌های سمی و حشرات غول‌آسا، نائوشیکا برای بازگرداندن تعادل میان آدم‌ها و طبیعت تلاش می‌کند.",
+    "original_language": "ja"
+  },
+  {
+    "source": "fixture",
+    "external_id": "made-in-abyss",
+    "source_url": "https://www.sentaifilmworks.com/blogs/catalog/made-in-abyss",
+    "media_type": "tv",
+    "title": "Made in Abyss",
+    "original_title": "メイドインアビス",
+    "persian_title": "ساخته‌شده در مغاک",
+    "release_year": 2017,
+    "genres": ["animation", "adventure", "fantasy", "mystery"],
+    "themes": ["بقا در محیط خصمانه", "جهانی با زیست‌بوم غریب", "کشف جهان ناشناخته"],
+    "overview_fa": "ریکو و دوست رباتش رِگ به اعماق پرتگاهی ناشناخته می‌روند تا رازهایش و سرنخ‌هایی از مادر ریکو را پیدا کنند.",
+    "original_language": "ja"
+  },
+  {
+    "source": "fixture",
+    "external_id": "genndy-tartakovskys-primal",
+    "source_url": "https://press.wbd.com/na/media-release/adult-swim-0/genndy-tartakovskys-primal/epic-saga-continues-emmyr-award-winning-series-genndy-tartakovskys-primal-returns",
+    "media_type": "tv",
+    "title": "Primal",
+    "original_title": "Genndy Tartakovsky's Primal",
+    "release_year": 2019,
+    "genres": ["animation", "action", "adventure", "fantasy"],
+    "themes": ["بقا در محیط خصمانه"],
+    "overview_fa": "یک شکارچی و یک دایناسور برای زنده ماندن در جهانی پیشاتاریخی و خطرناک به هم تکیه می‌کنند.",
+    "original_language": "en"
+  },
+  {
+    "source": "fixture",
+    "external_id": "death-note-anime-2006",
+    "source_url": "https://www.ntv.co.jp/english/pc/2011/03/death-note-1.html",
+    "media_type": "tv",
+    "title": "Death Note",
+    "original_title": "DEATH NOTE",
+    "persian_title": "دفتر مرگ",
+    "aliases": ["Death Nite", "DeathNote", "دث نوت", "دفترچه مرگ"],
+    "release_year": 2006,
+    "genres": ["animation", "mystery", "crime", "thriller"],
+    "themes": ["نبرد ذهنی", "تعقیب و گریز جنایی", "مرز اخلاقی قدرت"],
+    "overview_fa": "لایت با دفترچه‌ای که قدرت کشتن دارد، قضاوت دربارهٔ مجرمان را به دست خودش می‌گیرد. کارآگاه ال تلاش می‌کند هویت او را کشف کند.",
+    "original_language": "ja"
+  },
+  {
+    "source": "fixture",
+    "external_id": "monster-anime-2004",
+    "source_url": "https://www.ntv.co.jp/english/pc/2011/02/monster.html",
+    "media_type": "tv",
+    "title": "Monster",
+    "original_title": "MONSTER",
+    "release_year": 2004,
+    "genres": ["animation", "mystery", "crime", "drama"],
+    "themes": ["نبرد ذهنی", "تعقیب و گریز جنایی"],
+    "overview_fa": "نجات جان یک کودک مسیر زندگی دکتر تنما را عوض می‌کند. سال‌ها بعد، رشته‌ای از قتل‌ها او را دوباره به همان بیمار می‌رساند.",
+    "original_language": "ja"
+  },
+  {
+    "source": "fixture",
+    "external_id": "code-geass-2006",
+    "source_url": "https://www.sunrise-inc.co.jp/international/work/detail.php?cid=256",
+    "media_type": "tv",
+    "title": "Code Geass: Lelouch of the Rebellion",
+    "original_title": "コードギアス 反逆のルルーシュ",
+    "aliases": ["Code Geass"],
+    "release_year": 2006,
+    "genres": ["animation", "action", "drama", "science_fiction"],
+    "themes": ["نبرد ذهنی", "مرز اخلاقی قدرت"],
+    "overview_fa": "لولوش قدرتی به دست می‌آورد که می‌تواند با آن دیگران را وادار به فرمان‌برداری کند و از آن برای پیش بردن شورش خود استفاده می‌کند.",
+    "original_language": "ja"
+  },
+  {
+    "source": "fixture",
+    "external_id": "psycho-pass-2012",
+    "source_url": "https://psycho-pass.com/story/",
+    "media_type": "tv",
+    "title": "Psycho-Pass",
+    "original_title": "PSYCHO-PASS サイコパス",
+    "release_year": 2012,
+    "genres": ["animation", "crime", "mystery", "science_fiction"],
+    "themes": ["تعقیب و گریز جنایی", "مرز اخلاقی قدرت"],
+    "overview_fa": "بازرسی تازه‌کار در شهری کار می‌کند که یک سامانه تصمیم می‌گیرد چه کسی ممکن است مجرم شود. پرونده‌هایش او را با حدود اختیار آن سامانه روبه‌رو می‌کنند.",
+    "original_language": "ja"
+  }
+]

@@ -1,0 +1,11 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////opt/bot/data/moviebot.db
+    volumes:
+      - bot-data:/opt/bot/data
+volumes:
+  bot-data:

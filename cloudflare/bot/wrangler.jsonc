@@ -1,0 +1,19 @@
+{
+  "name": "chibebin-bot",
+  "main": "./worker.mjs",
+  "compatibility_date": "2026-11-17",
+  "workers_dev": true,
+  "preview_urls": false,
+  "triggers": { "crons": ["20 3 * * *"] },
+  "ratelimits": [
+    { "name": "USER_UPDATES_LIMIT", "namespace_id": "8101", "simple": { "limit": 20, "period": 60 } },
+    { "name": "USER_RECOMMEND_LIMIT", "namespace_id": "8102", "simple": { "limit": 6, "period": 60 } }
+  ],
+  "d1_databases": [
+    {
+      "binding": "BOT_DB",
+      "database_name": "chibebin-bot",
+      "database_id": "59588236-cce1-4852-acaa-993772df8f9a"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "chibebin-capacity-pilot",
+  "main": "./worker.mjs",
+  "compatibility_date": "2026-11-17",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "PILOT_DB",
+      "database_name": "chibebin-capacity-pilot",
+      "database_id": "9f0d3d51-b5fc-4214-9329-d94ca51bc3cc"
+    }
+  ]
+}
