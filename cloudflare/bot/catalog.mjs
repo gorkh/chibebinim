@@ -89,6 +89,7 @@ export function matches(m, q, details = true) {
   if (q.genres?.includes("animation") && !m.genres.includes("animation")) return false;
   const mayNeedKeywords = !details && m.media_type === "tv" && wanted.some(g => Object.hasOwn(TV_GENRE_KEYWORDS, g));
   if (wanted.length && !overlap(wanted, m.genres).length && !mayNeedKeywords) return false;
+  if (q.all_genres && !mayNeedKeywords && !wanted.every(tag => m.genres.includes(tag))) return false;
   if (q.avoid_genres?.length && (!m.genres.length || overlap(q.avoid_genres, m.genres).length ||
       (m.source === "tmdb" && m.media_type === "tv" && q.avoid_genres.some(g => !labels.tv_genres[g]?.length)))) return false;
   const bounds = [[year(m), q.release_year_min, q.release_year_max], [m.vote_average, q.min_rating, null]];
@@ -170,7 +171,62 @@ export async function findCandidates(db, key, q, chosen, hint) {
   const hydrate = (m) => get(`${m.media_type}/${m.external_id}`, { append_to_response: "translations,keywords" }).then(item => entry(item, m.media_type));
   let reference;
   let excluded;
+  let directors = [];
   let recommended = [];
+  if (q.director_name || q.director_of) {
+    const koreanAlias = q.director_name && /^کیم\s*کی\s*دو[کگ]$/u.test(normalizeTitle(q.director_name));
+    const directorOf = q.director_of;
+    if (directorOf) {
+      const [, name, releaseYear] = directorOf.match(/^(.+?)(?:\s+\(?((?:18|19|20)\d\d)\)?)?$/u);
+      const canonical = canonicalTitle(name);
+      const kind = q.director_reference_type ?? "movie";
+      const preferredYear = releaseYear ?? (kind === "movie" && normalizeTitle(name) === "pieta" ? "2012" : null);
+      const options = (await search(canonical, kind))
+        .filter(m => (exact(m, name) || exact(m, canonical)) && (!releaseYear || year(m) === Number(releaseYear)));
+      const preferred = preferredYear && !chosen && !hint ? options.filter(m => year(m) === Number(preferredYear)) : [];
+      const resolved = referenceChoices(preferred.length === 1 ? preferred : options, {}, name, canonical, chosen);
+      let { selected } = resolved;
+      if (hint && resolved.choices) {
+        const matching = await clarifyReference(resolved.choices, hint, get);
+        if (matching.length === 1) [selected] = matching;
+        else return { choices: matching.length ? matching : resolved.choices, unmatchedHint: !matching.length };
+      }
+      if (!selected) return resolved;
+      reference = selected;
+      const credits = await get(`${kind}/${selected.external_id}/credits`);
+      directors = (credits.crew ?? []).filter(p => p.job === "Director" && Number.isSafeInteger(p.id)).slice(0, 4);
+    } else if (koreanAlias) {
+      // This Persian spelling refers to the director of Pieta (2012).
+      directors = [{ id: 1188, name: "Kim Ki-duk" }];
+    } else {
+      const {results: people = []} = await get("search/person", { query: q.director_name, include_adult: "false" });
+      directors = people.filter(p => !p.adult && Number.isSafeInteger(p.id) && p.known_for_department === "Directing" &&
+        [p.name, p.original_name].some(name => normalizeTitle(name) === normalizeTitle(q.director_name)));
+      if (directors.length !== 1) return { directorUnresolved: true };
+    }
+    if (!directors.length) return { directorUnresolved: true };
+    const credits = await parallel(directors, p => get(`person/${p.id}/movie_credits`));
+    const films = (await parallel(credits.flatMap(r => (r.crew ?? []).filter(m => m.job === "Director")),
+      row => entry(row, "movie"))).filter(Boolean);
+    const candidates = distinct(films).filter(m => m.id !== reference?.id && matches(m, q, false))
+      .sort((a,b) => quality(b) - quality(a)).slice(0, 10);
+    const detailed = await parallel(candidates, async m => {
+      try { return await hydrate(m); }
+      catch (error) {
+        if (!(error instanceof CatalogError)) throw error;
+        // The filmography already verified the director.
+        return m;
+      }
+    });
+    const items = detailed.filter(m => m && matches(m, q)).map(m => ({
+      ...m,
+      director_match: directors.filter((_, i) => credits[i].crew?.some(row =>
+        row.job === "Director" && String(row.id) === m.external_id)).map(p => p.name).join("، "),
+    }));
+    const document = { items, related: [] };
+    await saveCatalog(db, cacheKey, document);
+    return document;
+  }
   if (q.dissimilar_to) {
     const [, name, releaseYear] = q.dissimilar_to.match(/^(.+?)(?:\s+\(?((?:19|20)\d\d)\)?)?$/u);
     const franchise = franchiseFor(name);
@@ -252,9 +308,13 @@ export async function findCandidates(db, key, q, chosen, hint) {
     .slice(0, Math.min(26, get.remaining()));
   const items = (await parallel(candidates, hydrate)).filter(m => m && matches(m, q) && (!excluded || !resemblesExcluded(m, excluded)));
   const document = { items, reference, related: recommended.map(m => m.id) };
+  await saveCatalog(db, cacheKey, document);
+  return document;
+}
+
+async function saveCatalog(db, cacheKey, document) {
   await db.prepare("INSERT INTO worker_catalog(key,document,expires_at) VALUES (?,?,unixepoch()+3600) ON CONFLICT(key) DO UPDATE SET document=excluded.document, expires_at=excluded.expires_at")
     .bind(cacheKey, JSON.stringify(document)).run();
-  return document;
 }
 
 const moods = { dark: ["crime","mystery","thriller","horror"], intense: ["action","thriller","crime","horror"],
@@ -277,6 +337,7 @@ export function rankItems(result, q, history, interactions, preferences) {
       const preferred = m.genres.filter(g => preferences[g] > 0);
       const selected = overlap(m.genres, q.genres ?? []);
       let explanation = "این عنوان با شرط‌هایی که انتخاب کردی جور درمیاد.";
+      if (m.director_match) explanation = `کارگردان: ${m.director_match}`;
       if (themes.length) explanation = `مثل عنوان مرجع، سراغ «${themes.slice(0, 2).join("» و «")}» می‌ره.`;
       else if (keywords.length) explanation = `برچسب‌های مشترک با عنوان مرجع: ${keywords.slice(0, 2).join("، ")}`;
       else if (shared.length || selected.length || preferred.length) explanation = `ژانر «${labels.genres[(shared[0] ?? selected[0] ?? preferred[0])]}» رو داره.`;

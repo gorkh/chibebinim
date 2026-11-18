@@ -43,7 +43,15 @@ globalThis.fetch = (...args) => {
   const url = new URL(args[0]);
   assert.equal(url.hostname, "api.themoviedb.org");
   tmdbCalls++;
-  return realFetch(...args);
+  const [target, init] = args;
+  const options = process.env.BOT_TEST_DIRECTOR_ONLY === "1" ? {...init, signal: AbortSignal.timeout(15000)} : init;
+  return realFetch(target, options).then(response => {
+    if (!response.ok) console.error("TMDB", url.pathname, response.status);
+    return response;
+  }, error => {
+    console.error("TMDB", url.pathname, error.name, error.cause?.code ?? "");
+    throw error;
+  });
 };
 const token = process.env.BOT_TEST_TMDB_TOKEN;
 if (!token) throw new Error("Set BOT_TEST_TMDB_TOKEN for the live catalog integration test");
@@ -107,6 +115,77 @@ const blockedSearch = await input("یه فیلم فانتزی");
 assert.equal(blockedSearch.tmdbCalls, 0);
 assert.match(last().text, /یک دقیقه/);
 delete env.USER_RECOMMEND_LIMIT;
+
+let aiCalls = 0;
+env.AI = {run: async () => {
+  aiCalls++;
+  return {response:JSON.stringify({director_name:"استیون اسپیلبرگ",media_type:"movie",max_runtime_minutes:119})};
+}};
+env.USER_AI_LIMIT = {limit: async () => ({success:true})};
+env.USER_RECOMMEND_LIMIT = {limit: async () => ({success:false})};
+await input("smart", true);
+const interpreted = await input("از استیون اسپیلبرگ کارگردان یه فیلم زیر دو ساعت پیشنهاد بده");
+assert.equal(interpreted.tmdbCalls, 0);
+assert.match(last().text, /استیون اسپیلبرگ/);
+assert.match(last().text, /۱۱۹/);
+await input(action("interpret:"), true);
+assert.match(last().text, /یک دقیقه/);
+assert.equal(aiCalls, 1);
+await input("یه فیلم معمایی زیر دو ساعت");
+assert.equal(aiCalls, 1);
+env.AI.run = async () => ({response:JSON.stringify({
+  media_type:"movie", genres:["sci-fi"], unsupported:["ending"],
+})});
+const partial = await input("یه فیلم علمی تخیلی با پایان خوش");
+assert.equal(partial.tmdbCalls, 0);
+assert.match(last().text, /نوع پایان/);
+assert.match(last().text, /علمی‌تخیلی/);
+assert.ok(last().reply_markup.inline_keyboard.flat().some(b => b.text === "با بقیهٔ شرط‌ها بگرد"));
+const pending = database.prepare("SELECT document FROM worker_state").get();
+assert.deepEqual(JSON.parse(pending.document).query, {media_type:"movie",genres:["science_fiction"]});
+await input(action("interpret:"), true);
+assert.match(last().text, /یک دقیقه/);
+await input("smart", true);
+await input(action("guided"), true);
+await input(action("type:"), true);
+await input(action("genre:"), true);
+const duration = last().reply_markup.inline_keyboard.flat().find(b => b.text === "زیر دو ساعت");
+assert.ok(duration);
+delete env.USER_RECOMMEND_LIMIT;
+const previousFetch = globalThis.fetch;
+globalThis.fetch = async (target) => {
+  const url = new URL(target);
+  assert.equal(url.pathname, "/3/discover/movie");
+  assert.equal(url.searchParams.get("with_runtime.lte"), "119");
+  assert.ok(url.searchParams.get("with_genres"));
+  return Response.json({results:[]});
+};
+try {
+  await input(duration.callback_data, true);
+  assert.match(last().text, /پیدا نکردم/);
+  assert.ok(action("guided"));
+} finally {
+  globalThis.fetch = previousFetch;
+}
+assert.equal(aiCalls, 1);
+delete env.AI;
+delete env.USER_AI_LIMIT;
+delete env.USER_RECOMMEND_LIMIT;
+if (process.env.BOT_TEST_AI_ONLY === "1") process.exit(0);
+
+for (const query of ["از کارگردا کیم کی دوک میخوام", "از کارگردان فیلم pieta"]) {
+  await input("smart", true);
+  const search = await input(query);
+  assert.match(last().caption ?? last().text, /Kim Ki[ -]duk/i);
+  const session = database.prepare("SELECT candidates, request_json FROM recommendation_sessions ORDER BY rowid DESC LIMIT 1").get();
+  const queue = JSON.parse(session.candidates);
+  assert.ok(queue.every(({media}) => /Kim Ki[ -]duk/i.test(media.director_match)));
+  if (query.endsWith("pieta")) assert.ok(queue.every(({media}) => !/^pietà?$/i.test(media.title)));
+  assert.ok(!session.request_json.includes(query.endsWith("pieta") ? "pieta" : "کیم"));
+  assert.ok(search.tmdbCalls <= 38);
+  console.log(JSON.stringify({ directorRequest: queue[0].media.title, tmdbCalls: search.tmdbCalls }));
+}
+if (process.env.BOT_TEST_DIRECTOR_ONLY === "1") process.exit(0);
 
 async function verifyFantasyExclusion() {
   await input("smart", true);

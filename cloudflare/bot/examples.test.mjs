@@ -4,6 +4,10 @@ import { parse, parseReferenceReply } from "./parse.mjs";
 import { resemblesExcluded } from "./catalog.mjs";
 
 const cases = [
+  ["از کارگردان کیم کی دوک میخوام", { media_type: "movie", director_name: "کیم کی دوک" }],
+  ["از کارگردا کیم کی دوک میخوام", { media_type: "movie", director_name: "کیم کی دوک" }],
+  ["از کارگردان فیلم pieta", { media_type: "movie", director_of: "pieta", director_reference_type: "movie" }],
+  ["یه فیلم از کارگردان «Kim Ki-duk» معرفی کن", { media_type: "movie", director_name: "Kim Ki-duk" }],
   ["یه فیلم معمایی زیر دو ساعت", { media_type: "movie", genres: ["mystery"], max_runtime_minutes: 119 }],
   ["یه فیلم معمایی کمتر از ۱۲۰ دقیقه", { media_type: "movie", genres: ["mystery"], max_runtime_minutes: 119 }],
   ["یه کمدی سبک برای آخر هفته", { genres: ["comedy"], mood: "light" }],

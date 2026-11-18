@@ -4,6 +4,7 @@ import { year } from "./catalog.mjs";
 export const { genres, quick, ui } = labels;
 export const button = (text, callback_data) => ({ text, callback_data });
 export const home = [button(ui.HOME, "menu")];
+export const ccloudDownload = [{text:"⬇️ سایت دانلود CCloud",url:"https://ccloud.sbs/"}];
 export const options = [button("🎬 پیشنهاد سریع", "quick"), button("🧠 انتخاب هوشمند", "smart")];
 export const menu = [
   options, [button("🔖 لیست تماشای من", "list:0"), button("❤️ سلیقه من", "profile")],
@@ -29,7 +30,7 @@ export function referenceLabel(media) {
 export function cardButtons(media, rec, status, page = 0) {
   const key = rec ?? media.id;
   const kind = rec ? "r" : "w";
-  const ccloud = { text: "🔎 برو به CCloud برای جست‌وجو", url: "https://ccloud.sbs/" };
+  const ccloud = button("راهنمای تماشا در CCloud", "ccloud_help");
   const rows = rec ? [
     [button("❤️ پسندیدم" + (status.preference === "liked" ? " ✓" : ""), `liked:${key}`),
       button("👎 نمی‌پسندم" + (status.preference === "disliked" ? " ✓" : ""), `disliked:${key}`)],

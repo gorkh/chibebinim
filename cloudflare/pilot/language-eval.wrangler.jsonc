@@ -1,0 +1,8 @@
+{
+  "name": "chibebin-language-eval",
+  "main": "./language-eval.mjs",
+  "compatibility_date": "2026-11-17",
+  "workers_dev": false,
+  "preview_urls": false,
+  "ai": { "binding": "AI" }
+}

@@ -9,7 +9,7 @@ from app.watch import WatchProvider
 HOME = "🏠 منوی اصلی"
 TYPES = {"movie": "🎬 فیلم", "tv": "📺 سریال", "any": "🎲 فرقی نداره"}
 CCLOUD_NOTICE = (
-    "اسم فیلم یا سریال رو کپی کن و در CCloud جست‌وجو کن. ممکنه این عنوان اونجا موجود نباشه."
+    "اگه CCloud رو داری، عنوان رو کپی کن، اپ رو از روی گوشی باز کن و در CCloud جست‌وجو کن. ممکنه این عنوان اونجا موجود نباشه."
 )
 WELCOME = (
     "سلام! 👋\n\nمن کمکت می‌کنم متناسب با سلیقه و حال‌وهوات، "
@@ -87,7 +87,7 @@ def card_keys(card: Card, copy: bool, watch: WatchProvider, page: int = 0) -> In
     key = card.recommendation_id or card.media.id
     kind = "r" if card.recommendation_id else "w"
     destination = InlineKeyboardButton(
-        text="🔎 برو به CCloud برای جست‌وجو", url=watch.get_watch_url(card.media.media_type)
+        text="⬇️ دانلود CCloud", url=watch.get_watch_url(card.media.media_type)
     )
     rows = []
     if card.recommendation_id:

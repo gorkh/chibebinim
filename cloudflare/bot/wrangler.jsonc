@@ -4,10 +4,12 @@
   "compatibility_date": "2026-11-17",
   "workers_dev": true,
   "preview_urls": false,
+  "ai": { "binding": "AI" },
   "triggers": { "crons": ["20 3 * * *"] },
   "ratelimits": [
     { "name": "USER_UPDATES_LIMIT", "namespace_id": "8101", "simple": { "limit": 20, "period": 60 } },
-    { "name": "USER_RECOMMEND_LIMIT", "namespace_id": "8102", "simple": { "limit": 6, "period": 60 } }
+    { "name": "USER_RECOMMEND_LIMIT", "namespace_id": "8102", "simple": { "limit": 6, "period": 60 } },
+    { "name": "USER_AI_LIMIT", "namespace_id": "8103", "simple": { "limit": 2, "period": 60 } }
   ],
   "d1_databases": [
     {

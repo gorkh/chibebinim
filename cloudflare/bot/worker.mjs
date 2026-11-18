@@ -1,7 +1,8 @@
 import { CatalogError, findCandidates, rankItems } from "./catalog.mjs";
 import { parse, parseReferenceReply } from "./parse.mjs";
+import { interpret, needsModel } from "./language.mjs";
 import logo from "./tmdb-logo.mjs";
-import { button, cardButtons, cardText, clarify, escape, expired, fa, genres, home,
+import { button, cardButtons, cardText, ccloudDownload, clarify, escape, expired, fa, genres, home,
   mediaLabel, menu, options, quick, referenceLabel, settings, ui, unavailable } from "./ui.mjs";
 
 const keyPattern = /^[a-f0-9]{32}$/;
@@ -9,6 +10,12 @@ const key = () => crypto.randomUUID().replaceAll("-", "");
 const now = (offset = 0) => new Date(Date.now() + offset).toISOString().replace("T", " ").slice(0, 23);
 const HOUR = 3600_000;
 const CHAT_LIMIT = 600;
+const guided = [button("انتخاب شرط‌ها با دکمه", "guided")];
+const guidedGenres = [...quick, "animation"];
+const guidedLimits = {
+  movie: { "90": ["زیر ۹۰ دقیقه","max_runtime_minutes",89], "120": ["زیر دو ساعت","max_runtime_minutes",119] },
+  tv: { "6": ["حداکثر ۶ قسمت","max_episodes",6], "10": ["حداکثر ۱۰ قسمت","max_episodes",10] },
+};
 
 class TelegramError extends Error {
   constructor(code) { super("Telegram API error"); this.code = code; }
@@ -36,13 +43,15 @@ function telegram(token) {
 }
 
 class Bot {
-  constructor(db, sender, chatId, tmdbKey, reply, recommendLimit) {
+  constructor(db, sender, chatId, tmdbKey, reply, recommendLimit, ai, aiLimit) {
     this.db = db;
     this.id = sender;
     this.chatId = chatId;
     this.tmdbKey = tmdbKey;
     this.reply = reply;
     this.recommendLimit = recommendLimit;
+    this.ai = ai;
+    this.aiLimit = aiLimit;
   }
   sql(query, ...args) { return this.db.prepare(query).bind(...args); }
   first(query, ...args) { return this.sql(query, ...args).first(); }
@@ -82,15 +91,16 @@ class Bot {
       ...(keyboard ? { reply_markup:{inline_keyboard:keyboard} } : {}),
     });
   }
-  async quick() {
+  async quick(useGuide = false) {
     const nonce = key().slice(0,10);
-    await this.setState({ mode:"type", nonce });
-    return this.send("فیلم می‌خوای یا سریال؟", [...Object.entries(ui.TYPES).map(([type, label]) =>
+    await this.setState({ mode:"type", nonce, useGuide });
+    const types = Object.entries(ui.TYPES).filter(([type]) => !useGuide || type !== "any");
+    return this.send("فیلم می‌خوای یا سریال؟", [...types.map(([type, label]) =>
       [button(label, `type:${nonce}:${type}`)]), home]);
   }
   async smart() {
     await this.setState({mode:"smart"});
-    return this.send(ui.SMART, [home]);
+    return this.send(ui.SMART, [guided,home]);
   }
   async profile() {
     const [weights, metrics] = await Promise.all([
@@ -154,6 +164,7 @@ class Bot {
     const context = {mode, kind: query.media_type ?? "any", genres: query.genres ?? [],
       reference_search: Boolean(query.similar_to?.length),
       reference_exclusion: Boolean(query.dissimilar_to),
+      director_search: query.director_of ? "by_title" : query.director_name ? "by_name" : null,
       follow_up: hint?.director ? "director" : hint?.year ? "year" : chosen ? "button" : null};
     let result;
     try { result = await findCandidates(this.db, this.tmdbKey, query, chosen, hint); }
@@ -161,6 +172,10 @@ class Bot {
       if (!(error instanceof CatalogError)) throw error;
       await this.diagnostic("catalog_unavailable", {...context, elapsed_ms: Date.now() - started});
       return this.send(unavailable, [options, home]);
+    }
+    if (result.directorUnresolved) {
+      await this.diagnostic("director_unresolved", context);
+      return this.send("کارگردان رو با اطمینان پیدا نکردم. اسم انگلیسی‌اش رو بنویس یا بگو «از کارگردان فیلم …».", [options,home]);
     }
     if (result.exclusionUnresolved) {
       await this.diagnostic("exclusion_reference_unresolved", context);
@@ -188,13 +203,15 @@ class Bot {
     const resolved = {...context, reference: ref ? {title: ref.title, year: ref.release_date?.slice(0, 4) ?? null} : null};
     if (!queue.length) {
       await this.diagnostic("recommendation_empty", {...resolved, candidates: result.items.length});
-      return this.send(ui.EMPTY,[options,home]);
+      return this.send(ui.EMPTY,[guided,options,home]);
     }
     const session = key(), rec = key(), item = queue[0];
     if (hint && result.reference) item.explanation = `اثر مرجع: ${mediaLabel(result.reference)}\n${item.explanation}`;
     const safeQuery = {...query};
     delete safeQuery.similar_to;
     delete safeQuery.dissimilar_to;
+    delete safeQuery.director_name;
+    delete safeQuery.director_of;
     await this.db.batch([
       this.media(item.media),
       this.sql("INSERT INTO recommendation_sessions(id,user_id,request_json,candidates,request_type,current_position,created_at,expires_at) VALUES(?,?,?,?,?,1,?,?)",
@@ -278,26 +295,57 @@ class Bot {
     if (cmd === "privacy") return this.send(ui.PRIVACY,settings);
     const state = await this.state();
     if (state.mode === "ref") {
+      const fresh = text.length <= CHAT_LIMIT ? parse(text) : null;
+      if (fresh?.director_name || fresh?.director_of) return this.recommend(fresh, "smart");
       const hint = text.length <= CHAT_LIMIT ? parseReferenceReply(text) : null;
       if (hint) return this.recommend(state.query, "smart", undefined, hint);
       await this.diagnostic("reference_hint_unrecognized", {mode:"smart"});
       return this.send("سال ساخت رو بنویس، مثلاً «۲۰۰۷»، یا بگو «کارگردانش Sean Penn است». از دکمه‌های پیام قبلی هم می‌تونی انتخاب کنی.", [home]);
     }
-    if (state.mode !== "smart") return this.send("از منو نوع پیشنهاد رو انتخاب کن.",menu);
+    if (!["smart", "interpret"].includes(state.mode)) return this.send("از منو نوع پیشنهاد رو انتخاب کن.",menu);
+    if (state.mode === "interpret") await this.setState({mode:"smart"});
     const query = text.length <= CHAT_LIMIT ? parse(text) : null;
+    if (this.ai && text.length <= CHAT_LIMIT && needsModel(text, query)) {
+      if (!(await this.aiLimit.limit({key:String(this.id)})).success) {
+        return this.send("درخواست‌های پیچیده رو کمی با فاصله بفرست. یک دقیقه دیگه امتحان کن.", [options,home]);
+      }
+      const result = await interpret(this.ai, text);
+      if (result?.query) {
+        const nonce = key().slice(0,10);
+        await this.setState({mode:"interpret",query:result.query,nonce});
+        const prompt = result.warning
+          ? `${result.warning}\n\nاگه موافقی، فقط با این شرط‌ها می‌گردم:\n${result.summary}`
+          : `این شرط‌ها رو فهمیدم. با همین‌ها بگردم؟\n${result.summary}`;
+        return this.send(prompt,
+          [[button(result.warning ? "با بقیهٔ شرط‌ها بگرد" : "بگرد",`interpret:${nonce}`),
+            button("دوباره می‌نویسم","smart")],home]);
+      }
+      if (result?.message) return this.send(result.message, [guided,options,home]);
+      return this.send("نتونستم شرط‌های این جمله رو دقیق دربیارم. می‌تونی نوع اثر، ژانر و محدودیتش رو با دکمه انتخاب کنی.", [guided,options,home]);
+    }
     if (query) return this.recommend(query,"smart");
     await this.diagnostic(text.length > CHAT_LIMIT ? "request_too_long" : "request_unparsed", {mode:"smart"});
-    return this.send(clarify,[options,home]);
+    return this.send(clarify,[guided,options,home]);
   }
   async callback(callback) {
     const [cmd,a,b] = callback.data.split(":");
     const state = await this.state();
+    if (cmd === "interpret" && state.mode === "interpret" && a === state.nonce) {
+      const consumed = await this.first("DELETE FROM worker_state WHERE user_id=? AND json_extract(document,'$.nonce')=? RETURNING user_id", this.userId, a);
+      if (!consumed) return this.send(expired,[options,home]);
+      await this.setState({mode:"smart"});
+      return this.recommend(state.query,"smart");
+    }
     const page = n => /^\d{1,5}$/.test(n ?? "") ? Number(n) : 0;
     if (cmd === "menu") { await this.setState({}); return this.send("امشب چی ببینیم؟ 🍿",menu); }
     if (cmd === "quick") return this.quick();
+    if (cmd === "guided") return this.quick(true);
     if (cmd === "smart") return this.smart();
     if (cmd === "profile") return this.profile();
     if (cmd === "settings") return this.send("تنظیمات",settings);
+    if (cmd === "ccloud_help") return this.send(
+      "اگه CCloud رو داری، در کارت فیلم «کپی اسم فیلم» رو بزن. بعد CCloud رو از روی گوشی باز کن و اسم رو داخلش جست‌وجو کن. ممکنه فیلم اونجا موجود نباشه.\n\nاگه برنامه رو نداری، لینک دانلود پایین این پیامه.",
+      [ccloudDownload,home]);
     if (cmd === "privacy") return this.send(ui.PRIVACY,settings);
     if (cmd === "credits") return this.reply("sendPhoto", {
       chat_id:this.chatId,photo:new Blob([Uint8Array.from(atob(logo), ch => ch.charCodeAt(0))], {type:"image/png"}),
@@ -324,14 +372,32 @@ class Bot {
     }
     if (cmd === "type" && state.mode === "type" && a === state.nonce && Object.hasOwn(ui.TYPES,b)) {
       const nonce = key().slice(0,10);
-      await this.setState({mode:"genre",nonce,type:b});
-      const buttons = quick.map(genre => button(genres[genre],`genre:${nonce}:${genre}`));
+      if (state.useGuide && !Object.hasOwn(guidedLimits, b)) return this.send(expired,[guided,home]);
+      await this.setState({mode:"genre",nonce,type:b,useGuide:state.useGuide});
+      const buttons = (state.useGuide ? guidedGenres : quick).map(genre => button(genres[genre],`genre:${nonce}:${genre}`));
       const rows = [];
       for (let i=0;i<buttons.length;i+=2) rows.push(buttons.slice(i,i+2));
-      return this.send("امشب چه ژانری دوست داری؟",[...rows,[button("🎲 سورپرایزم کن",`genre:${nonce}:any`)],home]);
+      return this.send("امشب چه ژانری دوست داری؟",[...rows,[button(state.useGuide ? "ژانر فرقی نداره" : "🎲 سورپرایزم کن",`genre:${nonce}:any`)],home]);
     }
-    if (cmd === "genre" && state.mode === "genre" && a === state.nonce && (quick.includes(b) || b === "any")) {
-      return this.recommend({media_type:state.type === "any" ? null : state.type,genres:b === "any" ? [] : [b]},"quick");
+    if (cmd === "genre" && state.mode === "genre" && a === state.nonce && ((state.useGuide ? guidedGenres : quick).includes(b) || b === "any")) {
+      const query = {media_type:state.type === "any" ? null : state.type,genres:b === "any" ? [] : [b]};
+      if (!state.useGuide) return this.recommend(query,"quick");
+      const nonce = key().slice(0,10);
+      await this.setState({mode:"guided_limit",nonce,query});
+      const rows = Object.entries(guidedLimits[query.media_type]).map(([value,[label]]) => [button(label,`guided_limit:${nonce}:${value}`)]);
+      return this.send(query.media_type === "movie" ? "فیلم چقدر طول بکشه؟" : "سریال حداکثر چند قسمت باشه؟",
+        [...rows,[button("فرقی نداره",`guided_limit:${nonce}:any`)],home]);
+    }
+    if (cmd === "guided_limit" && state.mode === "guided_limit" && a === state.nonce) {
+      const limits = guidedLimits[state.query.media_type];
+      if (b === "any" || Object.hasOwn(limits,b)) {
+        const query = {...state.query};
+        if (b !== "any") {
+          const [,field,value] = limits[b];
+          query[field] = value;
+        }
+        return this.recommend(query,"smart");
+      }
     }
     if (cmd === "ref" && state.mode === "ref" && a === state.nonce && /^\d$/.test(b ?? "") && state.choices[Number(b)]) {
       return this.recommend(state.query,"smart",state.choices[Number(b)]);
@@ -369,7 +435,7 @@ export async function handleUpdate(env, update, reply) {
   const db = env.BOT_DB;
   const claim = await db.prepare("INSERT INTO worker_updates(id) VALUES(?) ON CONFLICT DO NOTHING RETURNING id").bind(update.update_id).first();
   if (!claim) return;
-  const bot = new Bot(db,sender.id,message.chat.id,env.TMDB_READ_TOKEN,reply,env.USER_RECOMMEND_LIMIT);
+  const bot = new Bot(db,sender.id,message.chat.id,env.TMDB_READ_TOKEN,reply,env.USER_RECOMMEND_LIMIT,env.AI,env.USER_AI_LIMIT);
   try {
     if (callback) {
       try { await reply("answerCallbackQuery",{callback_query_id:callback.id}); }

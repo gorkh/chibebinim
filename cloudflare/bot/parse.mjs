@@ -19,6 +19,15 @@ export function parseReferenceReply(text) {
 
 export function parse(text) {
   const value = normalize(text);
+  const directorRequest = value.match(/^(?:(?:یه|یک)\s+)?(?:فیلمی?\s+)?از\s+کارگردان?(?:ِ|ی)?\s+(?:(فیلم|سریال)\s+)?(.+?)(?:\s+(?:می\s*خوام|می\s*خواهم|پیشنهاد بده|معرفی کن))?[؟.!]?$/u);
+  if (directorRequest) {
+    const [, kind, raw] = directorRequest;
+    const name = raw.replace(/^[«"]|[»"]$/gu, "").trim();
+    if (!name || name.length > 140 || /(?:نباش|نمی\s*خوا|\s+(?:که|ولی|اما)\s)/u.test(name)) return null;
+    return kind
+      ? { media_type: "movie", director_of: name, director_reference_type: kind === "سریال" ? "tv" : "movie" }
+      : { media_type: "movie", director_name: name };
+  }
   const query = {};
   const refStart = '(?:شبیه|مثل|مشابه)(?:\\s+|(?=[A-Za-z«"]))(?:(?:فیلم|سریال|انیمه)\\s+)?';
   const title = '(?:[«"]([^»"]+)[»"]|((?:(?!\\s+(?:شبیه|مثل|مشابه|ولی|اما|بلکه)\\s)[^«»"،,.!?؟؛])+?))';
