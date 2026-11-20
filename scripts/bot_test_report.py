@@ -33,6 +33,8 @@ WITH recent AS (
     GROUP BY 1, 2 ORDER BY disliked DESC, seen DESC LIMIT 20
 )
 SELECT {days} AS days,
+ (SELECT count(*) FROM users) AS users_total,
+ (SELECT count(DISTINCT user_id) FROM recommendations) AS recommendation_recipients,
  (SELECT COALESCE(json_group_object(status,count),'{{}}') FROM outcomes) AS outcomes,
  (SELECT COALESCE(json_group_object(event_name,count),'{{}}') FROM actions) AS actions,
  (SELECT COALESCE(json_group_array(json_object('reference',reference,'suggested',suggested,

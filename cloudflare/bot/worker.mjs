@@ -1,6 +1,6 @@
-import { CatalogError, findCandidates, rankItems } from "./catalog.mjs";
-import { parse, parseReferenceReply } from "./parse.mjs";
-import { interpret, needsModel } from "./language.mjs";
+import { CatalogError, findCandidates, matches, rankItems } from "./catalog.mjs";
+import { parseReferenceReply } from "./parse.mjs";
+import { interpret, instructions, continueRequest } from "./language.mjs";
 import logo from "./tmdb-logo.mjs";
 import { button, cardButtons, cardText, ccloudDownload, clarify, escape, expired, fa, genres, home,
   mediaLabel, menu, options, quick, referenceLabel, settings, ui, unavailable } from "./ui.mjs";
@@ -162,6 +162,7 @@ class Bot {
     }
     const started = Date.now();
     const context = {mode, kind: query.media_type ?? "any", genres: query.genres ?? [],
+      request_id:this.requestId ?? null,
       reference_search: Boolean(query.similar_to?.length),
       reference_exclusion: Boolean(query.dissimilar_to),
       director_search: query.director_of ? "by_title" : query.director_name ? "by_name" : null,
@@ -187,7 +188,7 @@ class Bot {
     }
     if (result.choices) {
       const nonce = key().slice(0,10);
-      await this.setState({mode:"ref",nonce,query,choices:result.choices.map(m => m.id)});
+      await this.setState({mode:"ref",nonce,query,choices:result.choices.map(m => m.id),requestId:this.requestId ?? null});
       await this.diagnostic(result.unmatchedHint ? "reference_hint_unmatched" : "reference_ambiguous",
         {...context, choices: result.choices.length});
       const prompt = result.unmatchedHint ? "با این مشخصات اثری در فهرست پیدا نکردم." : "منظورت کدوم اثره؟";
@@ -198,6 +199,7 @@ class Bot {
       this.all("SELECT media_id,preference,is_watched FROM user_media_interactions WHERE user_id=?",this.userId),
       this.first("SELECT genre_weights_json FROM user_preferences WHERE user_id=?",this.userId),
     ]);
+    result.items = result.items.filter(media => matches(media,query));
     const queue = rankItems(result,query,history.map(r => r.media_id),interactions,JSON.parse(prefs?.genre_weights_json ?? "{}")).slice(0,20);
     const ref = result.reference;
     const resolved = {...context, reference: ref ? {title: ref.title, year: ref.release_date?.slice(0, 4) ?? null} : null};
@@ -237,6 +239,7 @@ class Bot {
       const item = queue[position++];
       const media = item.media ?? JSON.parse((await this.first("SELECT metadata_json FROM media WHERE id=?",item.media_id))?.metadata_json ?? "null");
       if (!media) continue;
+      if (!matches(media,JSON.parse(session.request_json))) continue;
       media.id ??= item.media_id;
       const status = await this.status(media.id);
       if (status.is_watched || status.preference === "disliked") continue;
@@ -295,45 +298,79 @@ class Bot {
     if (cmd === "privacy") return this.send(ui.PRIVACY,settings);
     const state = await this.state();
     if (state.mode === "ref") {
-      const fresh = text.length <= CHAT_LIMIT ? parse(text) : null;
-      if (fresh?.director_name || fresh?.director_of) return this.recommend(fresh, "smart");
       const hint = text.length <= CHAT_LIMIT ? parseReferenceReply(text) : null;
-      if (hint) return this.recommend(state.query, "smart", undefined, hint);
-      await this.diagnostic("reference_hint_unrecognized", {mode:"smart"});
-      return this.send("سال ساخت رو بنویس، مثلاً «۲۰۰۷»، یا بگو «کارگردانش Sean Penn است». از دکمه‌های پیام قبلی هم می‌تونی انتخاب کنی.", [home]);
-    }
-    if (!["smart", "interpret"].includes(state.mode)) return this.send("از منو نوع پیشنهاد رو انتخاب کن.",menu);
-    if (state.mode === "interpret") await this.setState({mode:"smart"});
-    const query = text.length <= CHAT_LIMIT ? parse(text) : null;
-    if (this.ai && text.length <= CHAT_LIMIT && needsModel(text, query)) {
-      if (!(await this.aiLimit.limit({key:String(this.id)})).success) {
-        return this.send("درخواست‌های پیچیده رو کمی با فاصله بفرست. یک دقیقه دیگه امتحان کن.", [options,home]);
+      const yearReply=/^\s*(?:(?:نسخه[ٔی]?|سال(?:\s+ساخت)?|مال)\s*)?[۰-۹٠-٩0-9]{4}\s*[.؟!]?\s*$/u.test(text);
+      const directorReply=/^\s*(?:اونی که\s+)?کارگردان(?:ش|ی)?\s+/u.test(text) &&
+        !/(?:یه فیلم|یک فیلم|پیشنهاد|معرفی|زیر|حداکثر|قبل از|بعد از)/u.test(text);
+      if (hint && (yearReply || directorReply)) {
+        this.requestId=state.requestId;
+        return this.recommend(state.query, "smart", undefined, hint);
       }
-      const result = await interpret(this.ai, text);
-      if (result?.query) {
-        const nonce = key().slice(0,10);
-        await this.setState({mode:"interpret",query:result.query,nonce});
-        const prompt = result.warning
-          ? `${result.warning}\n\nاگه موافقی، فقط با این شرط‌ها می‌گردم:\n${result.summary}`
-          : `این شرط‌ها رو فهمیدم. با همین‌ها بگردم؟\n${result.summary}`;
-        return this.send(prompt,
-          [[button(result.warning ? "با بقیهٔ شرط‌ها بگرد" : "بگرد",`interpret:${nonce}`),
-            button("دوباره می‌نویسم","smart")],home]);
-      }
-      if (result?.message) return this.send(result.message, [guided,options,home]);
-      return this.send("نتونستم شرط‌های این جمله رو دقیق دربیارم. می‌تونی نوع اثر، ژانر و محدودیتش رو با دکمه انتخاب کنی.", [guided,options,home]);
     }
-    if (query) return this.recommend(query,"smart");
-    await this.diagnostic(text.length > CHAT_LIMIT ? "request_too_long" : "request_unparsed", {mode:"smart"});
-    return this.send(clarify,[guided,options,home]);
+    if (!text.trim() || text.length > CHAT_LIMIT) {
+      await this.diagnostic("request_too_long", {mode:"smart"});
+      return this.send("درخواستت رو در یک پیام کوتاه‌تر از ۶۰۰ حرف بفرست یا با دکمه‌ها انتخاب کن.", [guided,home]);
+    }
+    await this.setState({mode:"smart"});
+    if (!this.ai) return this.send("بررسی متن فعلاً در دسترس نیست. با دکمه‌ها شرط‌ها رو انتخاب کن.",[guided,home]);
+    if (this.aiLimit && !(await this.aiLimit.limit({key:String(this.id)})).success) {
+      await this.diagnostic("ai_rate_limited");
+      return this.send("درخواست‌های متنی رو کمی با فاصله بفرست. الان می‌تونی با دکمه‌ها پیشنهاد بگیری.",[guided,home]);
+    }
+    const day = new Date().toISOString().slice(0,10);
+    const budgetKey = "ai-budget:" + day;
+    // UTF-8 byte length bounds token count conservatively; reserve before inference.
+    const requestText = continueRequest(state,text);
+    const bytes = new TextEncoder().encode(instructions + requestText).length + 128;
+    const reservation = Math.ceil((2 * bytes + 850 * 8 + 1000) * 0.0409091 + 1700 * 0.2909091);
+    const budget = await this.first(
+      "INSERT INTO worker_catalog(key,document,expires_at) VALUES(?,?,unixepoch()+172800) ON CONFLICT(key) DO UPDATE SET document=CAST(CAST(document AS REAL)+? AS TEXT) WHERE CAST(document AS REAL)+?<=8000 RETURNING key",
+      budgetKey,String(reservation),reservation,reservation);
+    if (!budget) {
+      await this.diagnostic("ai_daily_budget_reached");
+      return this.send("سهمیهٔ رایگان بررسی متن امروز پر شده. با «انتخاب شرط‌ها با دکمه» می‌تونی پیشنهاد بگیری.",[guided,home]);
+    }
+    const requestId = key();
+    const result = await interpret(this.ai,requestText);
+    if (result.neurons > 0 && result.neurons <= reservation) {
+      await this.run("UPDATE worker_catalog SET document=CAST(MAX(0,CAST(document AS REAL)-?) AS TEXT) WHERE key=?",
+        reservation-result.neurons,budgetKey);
+    }
+    await this.diagnostic("ai_" + result.status,{
+      request_id:requestId,elapsed_ms:result.elapsed_ms,neurons:result.neurons ?? null,
+      fields:result.query ? Object.keys(result.query) : [],unsupported:result.unsupported ?? [],attempts:result.attempts,
+    });
+    if (result.query) {
+      const nonce = key().slice(0,10);
+      await this.setState({mode:"interpret",query:result.query,nonce,requestId,warning:Boolean(result.warning),
+        draft:requestText,evidence:result.evidence,expires:Date.now()+900000});
+      const prompt = result.warning
+        ? result.warning + "\n\nاگه موافقی، فقط با این شرط‌ها می‌گردم:\n" + result.summary
+        : "این شرط‌ها رو فهمیدم. با همین‌ها بگردم؟\n" + result.summary;
+      return this.send(prompt,[[button(result.warning ? "با بقیهٔ شرط‌ها بگرد" : "بگرد","interpret:" + nonce),
+        button("اصلاح درخواست","revise:"+nonce)],home]);
+    }
+    if (!["unrelated","unsupported","model_unavailable","model_timeout"].includes(result.status)) {
+      await this.setState({mode:"clarify",draft:requestText,expires:Date.now()+900000});
+    }
+    return this.send(result.message,[guided,options,home]);
   }
+
   async callback(callback) {
     const [cmd,a,b] = callback.data.split(":");
     const state = await this.state();
+    if (cmd === "revise" && state.mode === "interpret" && a === state.nonce && state.expires > Date.now()) {
+      await this.diagnostic("ai_revised",{request_id:state.requestId ?? null});
+      await this.setState({mode:"clarify",draft:state.draft,evidence:state.evidence,expires:state.expires});
+      return this.send("چه شرطی رو تغییر بدم؟ همون بخش رو بنویس.",[guided,home]);
+    }
     if (cmd === "interpret" && state.mode === "interpret" && a === state.nonce) {
+      if (state.expires && state.expires <= Date.now()) return this.smart();
       const consumed = await this.first("DELETE FROM worker_state WHERE user_id=? AND json_extract(document,'$.nonce')=? RETURNING user_id", this.userId, a);
       if (!consumed) return this.send(expired,[options,home]);
       await this.setState({mode:"smart"});
+      await this.diagnostic("ai_confirmed",{request_id:state.requestId ?? null,partial:state.warning ?? false});
+      this.requestId=state.requestId;
       return this.recommend(state.query,"smart");
     }
     const page = n => /^\d{1,5}$/.test(n ?? "") ? Number(n) : 0;
@@ -370,14 +407,21 @@ class Bot {
       ]);
       return this.send("سلیقه از نو تنظیم شد.",menu);
     }
-    if (cmd === "type" && state.mode === "type" && a === state.nonce && Object.hasOwn(ui.TYPES,b)) {
+    if (cmd === "type" && Object.hasOwn(ui.TYPES,b)) {
       const nonce = key().slice(0,10);
-      if (state.useGuide && !Object.hasOwn(guidedLimits, b)) return this.send(expired,[guided,home]);
-      await this.setState({mode:"genre",nonce,type:b,useGuide:state.useGuide});
-      const buttons = (state.useGuide ? guidedGenres : quick).map(genre => button(genres[genre],`genre:${nonce}:${genre}`));
+      const useGuide = state.mode === "type" && a === state.nonce && state.useGuide && b !== "any";
+      await this.setState({mode:"genre",nonce,type:b,useGuide});
+      const context = (useGuide ? "g" : "") + b;
+      const buttons = (useGuide ? guidedGenres : quick).map(genre => button(genres[genre],`genre:${context}:${genre}`));
       const rows = [];
       for (let i=0;i<buttons.length;i+=2) rows.push(buttons.slice(i,i+2));
-      return this.send("امشب چه ژانری دوست داری؟",[...rows,[button(state.useGuide ? "ژانر فرقی نداره" : "🎲 سورپرایزم کن",`genre:${nonce}:any`)],home]);
+      return this.send("امشب چه ژانری دوست داری؟",[...rows,[button(useGuide ? "ژانر فرقی نداره" : "🎲 سورپرایزم کن",`genre:${context}:any`)],home]);
+    }
+    if (cmd === "genre" && ["movie","tv","any","gmovie","gtv"].includes(a)) {
+      state.mode = "genre";
+      state.nonce = a;
+      state.useGuide = a.startsWith("g");
+      state.type = state.useGuide ? a.slice(1) : a;
     }
     if (cmd === "genre" && state.mode === "genre" && a === state.nonce && ((state.useGuide ? guidedGenres : quick).includes(b) || b === "any")) {
       const query = {media_type:state.type === "any" ? null : state.type,genres:b === "any" ? [] : [b]};
@@ -400,6 +444,7 @@ class Bot {
       }
     }
     if (cmd === "ref" && state.mode === "ref" && a === state.nonce && /^\d$/.test(b ?? "") && state.choices[Number(b)]) {
+      this.requestId=state.requestId;
       return this.recommend(state.query,"smart",state.choices[Number(b)]);
     }
     if (cmd === "remove" && keyPattern.test(a ?? "")) {
@@ -419,6 +464,7 @@ class Bot {
         return this.feedback(row,cmd,callback.message.message_id);
       }
     }
+    if (["genre","guided_limit"].includes(cmd)) return this.quick(cmd === "guided_limit");
     return this.send(expired,[options,home]);
   }
 }
@@ -435,8 +481,17 @@ export async function handleUpdate(env, update, reply) {
   const db = env.BOT_DB;
   const claim = await db.prepare("INSERT INTO worker_updates(id) VALUES(?) ON CONFLICT DO NOTHING RETURNING id").bind(update.update_id).first();
   if (!claim) return;
+  const lease = key();
+  const leaseKey = "busy:" + sender.id;
   const bot = new Bot(db,sender.id,message.chat.id,env.TMDB_READ_TOKEN,reply,env.USER_RECOMMEND_LIMIT,env.AI,env.USER_AI_LIMIT);
   try {
+    const acquired = await db.prepare("INSERT INTO worker_catalog(key,document,expires_at) VALUES(?,?,unixepoch()+90) ON CONFLICT(key) DO UPDATE SET document=excluded.document,expires_at=excluded.expires_at WHERE expires_at<unixepoch() RETURNING key")
+      .bind(leaseKey,lease).first();
+    if (!acquired) {
+      if (callback) await reply("answerCallbackQuery",{callback_query_id:callback.id,text:"درخواست قبلی هنوز در حال بررسیه. کمی صبر کن."});
+      else await reply("sendMessage",{chat_id:message.chat.id,text:"درخواست قبلی هنوز در حال بررسیه. بعد از پاسخش ادامه بده."});
+      return;
+    }
     if (callback) {
       try { await reply("answerCallbackQuery",{callback_query_id:callback.id}); }
       catch (error) { if (!(error instanceof TelegramError) || error.code !== 400) throw error; }
@@ -452,6 +507,8 @@ export async function handleUpdate(env, update, reply) {
     if (error instanceof TelegramError && error.code === 403) return;
     await db.prepare("DELETE FROM worker_updates WHERE id=?").bind(update.update_id).run();
     throw error;
+  } finally {
+    await db.prepare("DELETE FROM worker_catalog WHERE key=? AND document=?").bind(leaseKey,lease).run();
   }
 }
 
@@ -480,6 +537,7 @@ export default {
     await env.BOT_DB.batch([
       env.BOT_DB.prepare("DELETE FROM worker_updates WHERE created_at < unixepoch()-172800"),
       env.BOT_DB.prepare("DELETE FROM worker_catalog WHERE expires_at < unixepoch()"),
+      env.BOT_DB.prepare("DELETE FROM worker_state WHERE json_extract(document,'$.expires') IS NOT NULL AND json_extract(document,'$.expires') < ?").bind(Date.now()),
     ]);
   },
 };

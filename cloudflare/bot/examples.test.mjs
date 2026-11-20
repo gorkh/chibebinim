@@ -4,6 +4,11 @@ import { parse, parseReferenceReply } from "./parse.mjs";
 import { resemblesExcluded } from "./catalog.mjs";
 
 const cases = [
+  ["یه فیلم زیر یک ساعت و نیم اکشن مال قبل از سال ۲۰۰۰ آمریکایی",
+    {media_type:"movie",genres:["action"],max_runtime_minutes:89,release_year_max:1999,country:"US"}],
+  ["فیلم اکشن قبل از ۲۰۰۰", {media_type:"movie",genres:["action"],release_year_max:1999}],
+  ["فیلم بعد از سال ۲۰۰۰", {media_type:"movie",release_year_min:2001}],
+  ["فیلم سال ۲۰۰۰", {media_type:"movie",release_year_min:2000,release_year_max:2000}],
   ["از کارگردان کیم کی دوک میخوام", { media_type: "movie", director_name: "کیم کی دوک" }],
   ["از کارگردا کیم کی دوک میخوام", { media_type: "movie", director_name: "کیم کی دوک" }],
   ["از کارگردان فیلم pieta", { media_type: "movie", director_of: "pieta", director_reference_type: "movie" }],

@@ -55,7 +55,27 @@ globalThis.fetch = (...args) => {
 };
 const token = process.env.BOT_TEST_TMDB_TOKEN;
 if (!token) throw new Error("Set BOT_TEST_TMDB_TOKEN for the live catalog integration test");
-const env = { BOT_DB: db, TMDB_READ_TOKEN: token, WEBHOOK_SECRET: "local-only" };
+const responseFor = (filters,text,unsupported=[]) => ({
+  filters,evidence:Object.fromEntries(Object.keys(filters).map(field=>[field,
+    field.includes("runtime") ? text.match(/(?:زیر|حداکثر|حداقل|کمتر از|بیشتر از)\s+.+?(?:دقیقه|ساعت(?:\s+و\s+نیم)?)/u)?.[0] ?? text :
+    field.startsWith("release_year") ? text.match(/(?:قبل از|بعد از|سال)\s+(?:سال\s+)?[۰-۹0-9]+/u)?.[0] ?? text : text])),
+  unsupported,ambiguous:[],ignored:[],unrelated:false,
+});
+const defaultAi = {run:async (_model,{messages}) => {
+  const text=messages.at(-1).content;
+  const parsed=parse(text) ?? {};
+  if (!Object.keys(parsed).length) return {response:JSON.stringify({
+    filters:{},evidence:{},unsupported:[],ambiguous:[],ignored:[],unrelated:true,
+  }),usage:{neurons:50}};
+  const filters={...parsed};
+  delete filters.director_reference_type;
+  if ((filters.director_name || filters.director_of) && !text.includes("فیلم")) delete filters.media_type;
+  if (filters.similar_to) filters.similar_to=filters.similar_to[0];
+  delete filters.all_genres;
+  return {response:JSON.stringify(responseFor(filters,text)),usage:{neurons:50}};
+}};
+const env = { BOT_DB: db, TMDB_READ_TOKEN: token, WEBHOOK_SECRET: "local-only",AI:defaultAi,
+  USER_AI_LIMIT:{limit:async()=>({success:true})} };
 assert.equal(await mediaKey("tmdb", "tv", "123"), "6f2ee2159ec85a36877e374a8a19d2c9");
 assert.equal(parse("یه فیلم هیجان انگیز زیر دو ساعت").max_runtime_minutes, 119);
 assert.deepEqual(parseReferenceReply("اونی که کارگردانش sean Penn است"), { director: "sean Penn" });
@@ -73,6 +93,7 @@ assert.deepEqual(ranked.map(item => item.media.title), ["Monster"]);
 assert.equal((await worker.fetch(new Request("https://test.invalid/telegram", { method: "POST" }), env)).status, 401);
 assert.equal((await worker.fetch(new Request("https://test.invalid/health"), env)).status, 200);
 
+let autoConfirm = true;
 let updateId = 900000;
 const sent = [];
 const actor = 194863021;
@@ -87,6 +108,10 @@ async function input(text, callback = false, actorId = actor) {
   const before = { reads, tmdbCalls };
   const update = { update_id: updateId++, ...payload };
   await handleUpdate(env, update, call);
+  if (autoConfirm && !callback) {
+    const confirm=sent.at(-1)?.data.reply_markup?.inline_keyboard?.flat().find(b=>b.callback_data?.startsWith("interpret:"));
+    if (confirm) await input(confirm.callback_data,true,actorId);
+  }
   return { update, dbCalls: reads - before.reads, tmdbCalls: tmdbCalls - before.tmdbCalls };
 }
 const last = () => sent.at(-1)?.data;
@@ -116,10 +141,15 @@ assert.equal(blockedSearch.tmdbCalls, 0);
 assert.match(last().text, /یک دقیقه/);
 delete env.USER_RECOMMEND_LIMIT;
 
+autoConfirm = false;
 let aiCalls = 0;
-env.AI = {run: async () => {
+env.AI = {run: async (_model,{messages}) => {
   aiCalls++;
-  return {response:JSON.stringify({director_name:"استیون اسپیلبرگ",media_type:"movie",max_runtime_minutes:119})};
+  const text=messages.at(-1).content;
+  const filters=text.includes("اسپیلبرگ")
+    ? {director_name:"استیون اسپیلبرگ",media_type:"movie",max_runtime_minutes:119}
+    : {media_type:"movie",genres:["mystery"],max_runtime_minutes:119};
+  return {response:JSON.stringify(responseFor(filters,text)),usage:{neurons:50}};
 }};
 env.USER_AI_LIMIT = {limit: async () => ({success:true})};
 env.USER_RECOMMEND_LIMIT = {limit: async () => ({success:false})};
@@ -132,10 +162,10 @@ await input(action("interpret:"), true);
 assert.match(last().text, /یک دقیقه/);
 assert.equal(aiCalls, 1);
 await input("یه فیلم معمایی زیر دو ساعت");
-assert.equal(aiCalls, 1);
-env.AI.run = async () => ({response:JSON.stringify({
-  media_type:"movie", genres:["sci-fi"], unsupported:["ending"],
-})});
+assert.equal(aiCalls, 2);
+env.AI.run = async () => ({response:JSON.stringify(responseFor(
+  {media_type:"movie",genres:["science_fiction"]},"یه فیلم علمی تخیلی با پایان خوش",
+  [{kind:"ending",text:"با پایان خوش"}])),usage:{neurons:50}});
 const partial = await input("یه فیلم علمی تخیلی با پایان خوش");
 assert.equal(partial.tmdbCalls, 0);
 assert.match(last().text, /نوع پایان/);
@@ -167,10 +197,76 @@ try {
 } finally {
   globalThis.fetch = previousFetch;
 }
-assert.equal(aiCalls, 1);
-delete env.AI;
-delete env.USER_AI_LIMIT;
+assert.equal(aiCalls, 2);
+env.AI=defaultAi;
+autoConfirm=true;
+env.USER_AI_LIMIT={limit:async()=>({success:true})};
 delete env.USER_RECOMMEND_LIMIT;
+env.USER_RECOMMEND_LIMIT = {limit:async () => ({success:false})};
+await input("/recommend");
+const oldType = action("type:");
+await input("smart", true);
+await input(oldType, true);
+const oldGenre = action("genre:");
+await input("/menu");
+await input(oldGenre, true);
+assert.match(last().text, /یک دقیقه/);
+await input("/menu");
+await input("یه فیلم علمی تخیلی");
+assert.match(last().text, /یک دقیقه/);
+delete env.USER_RECOMMEND_LIMIT;
+await input("/menu");
+const fetchBeforeBounds = globalThis.fetch;
+globalThis.fetch = async target => {
+  const url = new URL(target);
+  if (url.pathname === "/3/discover/movie") {
+    assert.equal(url.searchParams.get("primary_release_date.lte"), "1999-12-31");
+    assert.equal(url.searchParams.get("with_runtime.lte"), "89");
+    assert.equal(url.searchParams.get("with_origin_country"), "US");
+    return Response.json({results:[
+      {id:991001,title:"Valid action",release_date:"1990-01-01",genre_ids:[28],vote_count:100},
+      {id:991002,title:"Wrong year",release_date:"2026-01-01",genre_ids:[28],vote_count:100},
+    ]});
+  }
+  assert.equal(url.pathname,"/3/movie/991001");
+  return Response.json({id:991001,title:"Valid action",release_date:"1990-01-01",genres:[{id:28}],
+    runtime:85,production_countries:[{iso_3166_1:"US"}],vote_count:100,vote_average:7});
+};
+try {
+  await input("یه فیلم زیر یک ساعت و نیم اکشن مال قبل از سال ۲۰۰۰ آمریکایی");
+  assert.match(last().caption ?? last().text,/Valid action/);
+  assert.doesNotMatch(last().caption ?? last().text,/Wrong year/);
+} finally { globalThis.fetch = fetchBeforeBounds; }
+const beforeBudget=database.prepare("SELECT document FROM worker_catalog WHERE key LIKE 'ai-budget:%'").get().document;
+database.prepare("UPDATE worker_catalog SET document='8000' WHERE key LIKE 'ai-budget:%'").run();
+await input("فیلم اکشن");
+assert.match(last().text,/سهمیهٔ رایگان/);
+assert.ok(action("guided"));
+database.prepare("UPDATE worker_catalog SET document=? WHERE key LIKE 'ai-budget:%'").run(beforeBudget);
+await input("guided",true);
+await input(action("type:"),true);
+assert.ok(action("genre:"));
+
+autoConfirm=false;
+let releaseModel;
+let announceModel;
+const modelEntered=new Promise(resolve=>{announceModel=resolve;});
+env.AI={run:async()=>{
+  announceModel();
+  return new Promise(resolve=>{releaseModel=resolve;});
+}};
+const inFlight=input("فیلم اکشن");
+await modelEntered;
+await input("/menu");
+assert.match(last().text,/درخواست قبلی/);
+releaseModel({response:JSON.stringify(responseFor({media_type:"movie",genres:["action"]},"فیلم اکشن")),usage:{neurons:50}});
+await inFlight;
+assert.ok(action("interpret:"));
+assert.equal(database.prepare("SELECT count(*) AS n FROM worker_catalog WHERE key LIKE 'busy:%'").get().n,0);
+assert.equal(database.prepare("SELECT count(*) AS n FROM analytics_events WHERE metadata_json LIKE '%یه فیلم زیر یک ساعت%'").get().n,0);
+env.AI=defaultAi;
+autoConfirm=true;
+await input("/menu");
 if (process.env.BOT_TEST_AI_ONLY === "1") process.exit(0);
 
 for (const query of ["از کارگردا کیم کی دوک میخوام", "از کارگردان فیلم pieta"]) {
@@ -219,7 +315,7 @@ assert.ok(last().text.startsWith("<code>"));
 await input("/profile");
 await input("smart", true);
 await input("این فقط جملهٔ ساختگی برای تست حریم خصوصی لاگ است");
-assert.ok(database.prepare("SELECT count(*) AS n FROM analytics_events WHERE event_name='bot_diagnostic' AND json_extract(metadata_json,'$.status')='request_unparsed'").get().n);
+assert.ok(database.prepare("SELECT count(*) AS n FROM analytics_events WHERE event_name='bot_diagnostic' AND json_extract(metadata_json,'$.status')='ai_unrelated'").get().n);
 assert.equal(database.prepare("SELECT count(*) AS n FROM analytics_events WHERE metadata_json LIKE '%جملهٔ ساختگی%'").get().n, 0);
 const warm = await input("یه انیمه شبیه Scavengers Reign");
 assert.equal(warm.tmdbCalls, 0);

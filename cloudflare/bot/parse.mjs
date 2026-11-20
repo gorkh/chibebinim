@@ -72,11 +72,14 @@ export function parse(text) {
     remaining = remaining.replace(match[0], "");
   }
   if (/مینی\s*سریال/u.test(remaining)) query.max_seasons = 1;
-  for (const match of remaining.matchAll(/(بعد از|قبل از|از سال|تا سال|سال)\s*((?:18|19|20)\d\d)/gu)) {
+  for (const match of remaining.matchAll(/(بعد از|قبل از|از سال|تا سال|سال)\s*(?:سال\s+)?((?:18|19|20)\d\d)/gu)) {
     const y = Number(match[2]);
     if (["بعد از","از سال","سال"].includes(match[1])) query.release_year_min = Math.max(query.release_year_min ?? 0, y + Number(match[1] === "بعد از"));
     if (["قبل از","تا سال","سال"].includes(match[1])) query.release_year_max = Math.min(query.release_year_max ?? 2100, y - Number(match[1] === "قبل از"));
     remaining = remaining.replace(match[0], "");
+  }
+  for (const [word, country] of [["آمریکایی","US"],["امریکایی","US"]]) {
+    if (new RegExp(`(?<![\\p{L}\\p{N}])${word}(?![\\p{L}\\p{N}])`, "u").test(remaining)) query.country = country;
   }
   const rating = remaining.match(/(?:حداقل امتیاز|امتیاز(?: بالای| بالاتر از| حداقل))\s+(\d+(?:[.٫]\d+)?)/u);
   if (rating && !/imdb/i.test(remaining)) {

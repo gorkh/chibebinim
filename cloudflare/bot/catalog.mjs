@@ -66,6 +66,7 @@ async function entry(row, kind) {
     id: await mediaKey("tmdb", kind, row.id), source: "tmdb", external_id: String(row.id),
     media_type: kind, title, release_date: released,
     original_title: (kind === "tv" ? row.original_name : row.original_title) || title,
+    countries: [...new Set([...(row.origin_country ?? []), ...(row.production_countries ?? []).map(c => c.iso_3166_1)])],
     genres: [...new Set(mapped)],
     verified_genres: curated?.genres ?? [],
     aliases: curated?.aliases ?? [], themes: curated?.themes ?? [],
@@ -85,6 +86,7 @@ async function entry(row, kind) {
 export function matches(m, q, details = true) {
   if (q.media_type && m.media_type !== q.media_type) return false;
   if (q.language && m.original_language !== q.language) return false;
+  if (details && q.country && !m.countries?.includes(q.country)) return false;
   const wanted = (q.genres ?? []).filter(g => g !== "animation");
   if (q.genres?.includes("animation") && !m.genres.includes("animation")) return false;
   const mayNeedKeywords = !details && m.media_type === "tv" && wanted.some(g => Object.hasOwn(TV_GENRE_KEYWORDS, g));
@@ -159,7 +161,7 @@ async function clarifyReference(choices, hint, get) {
 }
 
 export async function findCandidates(db, key, q, chosen, hint) {
-  const version = q.dissimilar_to || franchiseFor(q.similar_to?.[0]) ? "bot-v6" : "bot-v5";
+  const version = q.country ? "bot-v7" : q.dissimilar_to || franchiseFor(q.similar_to?.[0]) ? "bot-v6" : "bot-v5";
   const cacheKey = hex(new Uint8Array(await crypto.subtle.digest(
     "SHA-256", encoder.encode(JSON.stringify([version, q, chosen ?? null, hint ?? null])),
   )));
@@ -269,6 +271,7 @@ export async function findCandidates(db, key, q, chosen, hint) {
     if (q.release_year_min) query[`${date}.gte`] = `${q.release_year_min}-01-01`;
     if (q.release_year_max) query[`${date}.lte`] = `${q.release_year_max}-12-31`;
     if (q.language) query.with_original_language = q.language;
+    if (q.country) query.with_origin_country = q.country;
     if (kind === "movie") {
       if (q.max_runtime_minutes) query["with_runtime.lte"] = q.max_runtime_minutes;
       if (q.min_runtime_minutes) query["with_runtime.gte"] = q.min_runtime_minutes;
