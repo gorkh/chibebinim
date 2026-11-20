@@ -344,13 +344,14 @@ class Bot {
       const nonce = key().slice(0,10);
       await this.setState({mode:"interpret",query:result.query,nonce,requestId,warning:Boolean(result.warning),
         draft:requestText,evidence:result.evidence,expires:Date.now()+900000});
-      const prompt = result.warning
+      let prompt = result.warning
         ? result.warning + "\n\nاگه موافقی، فقط با این شرط‌ها می‌گردم:\n" + result.summary
         : "این شرط‌ها رو فهمیدم. با همین‌ها بگردم؟\n" + result.summary;
+      if (result.note) prompt += "\n\n" + result.note;
       return this.send(prompt,[[button(result.warning ? "با بقیهٔ شرط‌ها بگرد" : "بگرد","interpret:" + nonce),
         button("اصلاح درخواست","revise:"+nonce)],home]);
     }
-    if (!["unrelated","unsupported","model_unavailable","model_timeout"].includes(result.status)) {
+    if (!["unrelated","model_unavailable","model_timeout"].includes(result.status)) {
       await this.setState({mode:"clarify",draft:requestText,expires:Date.now()+900000});
     }
     return this.send(result.message,[guided,options,home]);

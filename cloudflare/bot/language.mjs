@@ -1,5 +1,6 @@
 import labels from "./labels.json" with { type: "json" };
 import { parse } from "./parse.mjs";
+import { moods, themes } from "./semantics.mjs";
 
 export const QWEN_MODEL = "@cf/qwen/qwen3.8-27b";
 export const instructions = [
@@ -7,6 +8,7 @@ export const instructions = [
   'Return {"filters":{}, "evidence":{}, "unsupported":[], "ambiguous":[], "ignored":[], "unrelated":false}.',
   'filters contains ONLY explicit conditions. evidence has a verbatim input quote per filter key. Quotes jointly cover ALL meaningful parts of input. ignored contains verbatim filler words (یه، لطفا، بده، میخوام). Never ignore a meaningful condition.',
   'Allowed filters: media_type movie/tv; genres and avoid_genres arrays of action,adventure,animation,comedy,crime,drama,family,fantasy,horror,mystery,romance,science_fiction,thriller,western,documentary,history,music,war; language ISO639-1 ORIGINAL audio; country ISO3166-1 alpha2; release_year_min/max; min_runtime_minutes; max_runtime_minutes; max_episodes; max_seasons; min_rating TMDB. Also director_name (exact user name), director_of (reference film title), similar_to (string), dissimilar_to (string).',
+  'Qualitative language is supported, not ambiguous or unsupported. moods is an array of uplifting (hopeful, inspirational, امیدبخش, به آدم امید بده), eerie (وهم‌انگیز, وهوانگیز, uncanny), dark, light, intense. themes is an array of teen (تینجری, teenage, نوجوانانه), geek (گیک طوری, nerdy), technology (فناورگونه, technological, هوش مصنوعی), space, friendship. Use these as approximate preferences. ترسناک maps to horror genre; فانتزی to fantasy; رومانتیک/رومانتیک/رمانتیک to romance. Distinguish an eerie atmosphere from explicit horror and never automatically add horror. Genres may be supplied without the word فیلم, e.g. ژانر درام means genres ["drama"]. Quoted evidence for a genre must include ژانر if present. Hopeful does NOT request a guaranteed happy ending. Do not call hopeful plot/ending/other.',
   'Bounds are inclusive. زیر یک ساعت و نیم = max_runtime_minutes 89; قبل از سال ۲۰۰۰ = release_year_max 1999; بعد از ۲۰۱۰ = release_year_min 2011. Exact year sets both min and max. Multiple genres mean all genres. Miniseries implies tv,max_seasons 1. Anime implies animation, do not infer movie/tv. Nationality means country, not language.',
   'unsupported contains {"kind":"cast|dub|subtitles|ending|age|violence|plot|imdb|other","text":"exact quote"} for EVERY condition unavailable in our catalog. Keep other supported filters. Dub/subtitles language is not original audio. ambiguous contains exact quotes needing clarification, e.g. "امتیاز بالا", "جدید", "ریتم کند". Never invent numeric thresholds. unrelated true only for non movie/TV requests.',
   'Director extraction applies regardless of word order. "از استیون اسپیلبرگ کارگردان" means director_name "استیون اسپیلبرگ". "از کارگردان فیلم Pieta" means director_of "Pieta", not director_name. Preserve genre and duration alongside director. Never infer media_type from a reference title.',
@@ -18,7 +20,10 @@ export const instructions = [
 ].join("\n");
 export const needsModel = text => Boolean(text?.trim());
 export function continueRequest(state,text) {
-  if (state.mode !== "clarify" || state.expires <= Date.now()) return text;
+  if (!["clarify","interpret"].includes(state.mode) || state.expires <= Date.now()) return text;
+  const fresh=/^(?:(?:یه|یک)\s+)?(?:فیلمی?|سریال|انیمه)(?=\s|$)|^از\s+کارگردان/u.test(text.trim());
+  if (fresh) return text;
+  if (state.mode==="interpret" && !/^(?:ژانر|زیر|حداکثر|حداقل|قبل از|بعد از|نه|کشور|زبان|درام|کمدی|اکشن|ترسناک|فانتزی|عاشقانه)(?=\s|$)/u.test(text.trim())) return text;
   let draft=state.draft;
   const correction=parse("فیلم " + text);
   // Replace a numeric clause only when a new explicit value for that field is supplied.
@@ -33,7 +38,7 @@ export const normalizeInput = text => text.normalize("NFKC").replaceAll("ي","ی
   .replace(/[٠-٩]/gu,ch=>String("٠١٢٣٤٥٦٧٨٩".indexOf(ch))).replace(/فیلمی(?=\s|$)/gu,"فیلم")
   .replace(/\s+/gu," ").trim().toLowerCase();
 const filler = new Set(("یه یک لطفا لطفاً میخوام می خوام میخواهم می خواهم بده بدین پیشنهاد معرفی کن کنید برام برای من میشه میشود می شود " +
-  "هست باشه باشد داشته داشتن چیزی رو را به از با که و ولی اما هم مال اثر آثار").split(" "));
+  "هست باشه باشد داشته داشتن چیزی رو را به از با که و ولی اما هم مال اثر آثار ژانر").split(" "));
 const clarification = (status, message) => ({status,message,query:null});
 
 export function validateInterpretation(value, text) {
@@ -181,7 +186,13 @@ export function validateFilters(value) {
   const summary = [];
   for (const [field, val] of Object.entries(value)) {
     if (field === "unsupported") continue;
-    if (field === "media_type" && ["tv","movie"].includes(val)) {
+    if (["moods","themes"].includes(field) && Array.isArray(val) && val.length && val.length<=3) {
+      const definitions=field==="moods" ? moods : themes;
+      if (!val.every(key=>typeof key==="string" && Object.hasOwn(definitions,key))) return null;
+      query[field]=[...new Set(val)];
+      summary.push((field==="moods" ? "حال‌وهوای ترجیحی: " : "موضوع یا فضای ترجیحی: ") + val.map(key=>definitions[key].label).join("، "));
+      continue;
+    } else if (field === "media_type" && ["tv","movie"].includes(val)) {
       summary.push(val === "tv" ? "سریال" : "فیلم");
     } else if (field === "language" && Object.values(labels.languages).includes(val)) {
       summary.push("زبان اصلی: " + Object.keys(labels.languages).find(k => labels.languages[k] === val));
@@ -217,5 +228,8 @@ export function validateFilters(value) {
   if ((query.max_episodes || query.max_seasons) && query.media_type !== "tv") return null;
   if ((query.max_runtime_minutes || query.min_runtime_minutes) && query.media_type !== "movie") return null;
   if (query.genres?.length > 1) query.all_genres = true;
-  return { query, summary:summary.map(item => "• " + item).join("\n"), warning };
+  const subjective=query.moods?.length || query.themes?.length;
+  const notice=subjective ? "حال‌وهوا و فضای اثر بر اساس برچسب‌های کاتالوگ و انتخاب‌های تحریری تخمین زده می‌شن." : "";
+  return { query, summary:summary.map(item => "• " + item).join("\n"),
+    warning,note:notice,partial:unverified.length>0 };
 }

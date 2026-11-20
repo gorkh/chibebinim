@@ -54,6 +54,36 @@ test("Ambiguous rating asks for a value",()=>{
   assert.equal(result.status,"ambiguous");
   assert.equal(result.query,null);
 });
+test("Hopeful atmosphere is a supported preference",()=>{
+  const result=validateInterpretation(contract({media_type:"movie",moods:["uplifting"]},
+    {media_type:"فیلمی",moods:"به آدم امید بده"}),"فیلمی که به آدم امید بده");
+  assert.equal(result.status,"understood");
+  assert.deepEqual(result.query.moods,["uplifting"]);
+  assert.equal(result.warning,"");
+  assert.match(result.note,/تخمین/);
+});
+test("Genre reply can extend an unsupported draft",()=>{
+  const text=continueRequest({mode:"clarify",draft:"فیلمی که به آدم امید بده",expires:Date.now()+60000},"ژانر درام");
+  const result=validateInterpretation(contract({media_type:"movie",moods:["uplifting"],genres:["drama"]},
+    {media_type:"فیلمی",moods:"به آدم امید بده",genres:"ژانر درام"}),text);
+  assert.equal(result.status,"understood");
+  assert.deepEqual(result.query.genres,["drama"]);
+});
+test("A genre follow-up before confirmation preserves the mood",()=>{
+  const state={mode:"interpret",draft:"فیلمی که به آدم امید بده",expires:Date.now()+60000};
+  assert.ok(continueRequest(state,"ژانر درام").includes("امید"));
+  assert.equal(continueRequest(state,"یه فیلم ترسناک"),"یه فیلم ترسناک");
+});
+test("Approximate preferences still affect actual candidate filtering",()=>{
+  const query={media_type:"movie",genres:["drama"],moods:["uplifting"]};
+  assert.ok(matches({title:"The Shawshank Redemption",release_date:"1994-01-01",media_type:"movie",genres:["drama"]},query));
+  assert.equal(matches({title:"Random dark drama",media_type:"movie",genres:["drama"],keywords:[]},query),false);
+  assert.equal(matches({title:"Comedy",media_type:"movie",genres:["comedy"],keywords:["hope"]},query),false);
+});
+test("Supernatural subject matter alone does not imply an eerie atmosphere",()=>{
+  assert.equal(matches({title:"Fantasy adventure",media_type:"movie",genres:["fantasy"],
+    keywords:["supernatural"]},{media_type:"movie",moods:["eerie"]}),false);
+});
 test("Two genres must both match",()=>{
   const result=validateInterpretation(contract({media_type:"movie",genres:["action","mystery"]},
     {media_type:"فیلم",genres:"معمایی و اکشن"}),"فیلم معمایی و اکشن");

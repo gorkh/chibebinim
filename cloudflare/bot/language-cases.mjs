@@ -25,4 +25,13 @@ export const cases = [
     {media_type:"movie",release_year_max:1989,max_runtime_minutes:90,language:"en"}],
   ["یه فیلم علمی تخیلی با پایان خوش",
     {media_type:"movie",genres:["science_fiction"],unsupported:["ending"]}],
+  ["فیلمی که به آدم امید بده", {media_type:"movie",moods:["uplifting"]}],
+  ["یه فیلم درام امیدبخش", {media_type:"movie",genres:["drama"],moods:["uplifting"]}],
+  ["یه فیلم وهم‌انگیز", {media_type:"movie",moods:["eerie"]}],
+  ["یه فیلم وهوانگیز", {media_type:"movie",moods:["eerie"]}],
+  ["یه سریال تینجری رومانتیک", {media_type:"tv",themes:["teen"],genres:["romance"]}],
+  ["یه فیلم گیک طوری", {media_type:"movie",themes:["geek"]}],
+  ["یه فیلم فناورگونه", {media_type:"movie",themes:["technology"]}],
+  ["یه فیلم ترسناک فانتزی", {media_type:"movie",genres:["horror","fantasy"],all_genres:true}],
+  ["فیلمی که به آدم امید بده ژانر درام", {media_type:"movie",moods:["uplifting"],genres:["drama"]}],
 ];

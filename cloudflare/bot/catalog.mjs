@@ -1,5 +1,6 @@
 import labels from "./labels.json" with { type: "json" };
 import fixture from "../../app/catalog.json" with { type: "json" };
+import { preferences as semanticPreferences, semanticTags, matchesPreferences, editorialPreferenceScore } from "./semantics.mjs";
 
 const MOVIE_IDS = Object.fromEntries(Object.entries(labels.movie_genres).filter(([id]) => +id < 10759));
 const namespace = Uint8Array.from("6ba7b8119dad11d180b400c04fd430c8".match(/../g), (b) => parseInt(b, 16));
@@ -62,7 +63,7 @@ async function entry(row, kind) {
       if (curated?.genres.includes(genre) || terms.some(term => tags.has(term))) mapped.push(genre);
     }
   }
-  return {
+  const media = {
     id: await mediaKey("tmdb", kind, row.id), source: "tmdb", external_id: String(row.id),
     media_type: kind, title, release_date: released,
     original_title: (kind === "tv" ? row.original_name : row.original_title) || title,
@@ -81,12 +82,15 @@ async function entry(row, kind) {
     rating_source: "TMDB", popularity: row.popularity ?? 0,
     source_url: `https://www.themoviedb.org/${kind}/${row.id}`,
   };
+  media.semantic_tags=semanticTags(media);
+  return media;
 }
 
 export function matches(m, q, details = true) {
   if (q.media_type && m.media_type !== q.media_type) return false;
   if (q.language && m.original_language !== q.language) return false;
   if (details && q.country && !m.countries?.includes(q.country)) return false;
+  if (details && !matchesPreferences(m,q)) return false;
   const wanted = (q.genres ?? []).filter(g => g !== "animation");
   if (q.genres?.includes("animation") && !m.genres.includes("animation")) return false;
   const mayNeedKeywords = !details && m.media_type === "tv" && wanted.some(g => Object.hasOwn(TV_GENRE_KEYWORDS, g));
@@ -161,13 +165,22 @@ async function clarifyReference(choices, hint, get) {
 }
 
 export async function findCandidates(db, key, q, chosen, hint) {
-  const version = q.country ? "bot-v7" : q.dissimilar_to || franchiseFor(q.similar_to?.[0]) ? "bot-v6" : "bot-v5";
+  const version = semanticPreferences(q).length ? "bot-v8" : q.country ? "bot-v7" : q.dissimilar_to || franchiseFor(q.similar_to?.[0]) ? "bot-v6" : "bot-v5";
   const cacheKey = hex(new Uint8Array(await crypto.subtle.digest(
     "SHA-256", encoder.encode(JSON.stringify([version, q, chosen ?? null, hint ?? null])),
   )));
   const cache = await db.prepare("SELECT document FROM worker_catalog WHERE key=? AND expires_at>unixepoch()").bind(cacheKey).first();
   if (cache) return JSON.parse(cache.document);
   const get = tmdb(key);
+  let partialFailures=0;
+  const optional=async (operation,fallback)=>{
+    try { return await operation(); }
+    catch(error) {
+      if (!(error instanceof CatalogError)) throw error;
+      partialFailures++;
+      return fallback;
+    }
+  };
   const results = async (res, kind) => (await parallel(res.results ?? [], item => entry(item, kind))).filter(Boolean);
   const search = async (name, kind) => results(await get(`search/${kind}`, { query: name, include_adult: "false" }), kind);
   const hydrate = (m) => get(`${m.media_type}/${m.external_id}`, { append_to_response: "translations,keywords" }).then(item => entry(item, m.media_type));
@@ -284,6 +297,22 @@ export async function findCandidates(db, key, q, chosen, hint) {
         Object.keys(MOVIE_IDS).filter(id => MOVIE_IDS[id].includes(g)));
       if (groups.every(group => group.length)) query.with_genres = [...new Set(groups.flat())].join("|");
     }
+    const selected=semanticPreferences(q);
+    if (selected.length) {
+      if (get.remaining()<18) return [];
+      const terms=[...new Set(selected.flatMap(item=>item.terms))].slice(0,4);
+      const ids=(await parallel(terms,async term=>{
+        const response=await optional(()=>get("search/keyword",{query:term}),null);
+        return response?.results?.find(item=>normalizeTitle(item.name)===normalizeTitle(term))?.id;
+      })).filter(Boolean);
+      const discovered=ids.length
+        ? await optional(async()=>results(await get(`discover/${kind}`,{...query,with_keywords:ids.join("|")}),kind),[]) : [];
+      const seeds=distinct(selected.flatMap(item=>item.seeds)
+        .filter(([,type])=>type===kind).map(([title,type,release_year])=>({id:title+release_year,title,media_type:type,release_year}))).slice(0,3);
+      const known=await parallel(seeds,async seed=>(await optional(()=>search(seed.title,kind),[])).find(m=>
+        exact(m,seed.title) && year(m)===seed.release_year && matches(m,q,false)));
+      return distinct([...known.filter(Boolean),...discovered]);
+    }
     if (!keywordGenres.length) return results(await get(`discover/${kind}`, query), kind);
     const terms = keywordGenres.flatMap(g => TV_GENRE_KEYWORDS[g]).slice(0, 4);
     const keywordIds = (await parallel(terms, async term => {
@@ -309,7 +338,12 @@ export async function findCandidates(db, key, q, chosen, hint) {
   const candidates = distinct([...recommended, ...broad]).filter(m => m.id !== reference?.id &&
       (!excluded || (m.id !== excluded.id && !excluded.franchise?.relatedTitles.test(normalizeTitle(m.title)))))
     .slice(0, Math.min(26, get.remaining()));
-  const items = (await parallel(candidates, hydrate)).filter(m => m && matches(m, q) && (!excluded || !resemblesExcluded(m, excluded)));
+  const items = (await parallel(candidates,async media=>{
+    const hydrated=await optional(()=>hydrate(media),null);
+    // A seed can still satisfy all requested constraints using official search metadata.
+    return hydrated ?? (semanticPreferences(q).length && matches(media,q) ? media : null);
+  })).filter(m => m && matches(m, q) && (!excluded || !resemblesExcluded(m, excluded)));
+  if (!items.length && partialFailures) throw new CatalogError();
   const document = { items, reference, related: recommended.map(m => m.id) };
   await saveCatalog(db, cacheKey, document);
   return document;
@@ -320,11 +354,11 @@ async function saveCatalog(db, cacheKey, document) {
     .bind(cacheKey, JSON.stringify(document)).run();
 }
 
-const moods = { dark: ["crime","mystery","thriller","horror"], intense: ["action","thriller","crime","horror"],
+const moodGenres = { dark: ["crime","mystery","thriller","horror"], intense: ["action","thriller","crime","horror"],
   light: ["comedy","family","animation"], uplifting: ["comedy","family","adventure"] };
 export function rankItems(result, q, history, interactions, preferences) {
   const {items, reference, related} = result;
-  const target = [...new Set([...(q.genres ?? []), ...(moods[q.mood] ?? [])])];
+  const target = [...new Set([...(q.genres ?? []), ...(moodGenres[q.mood] ?? [])])];
   const keywordGenres = (q.genres ?? []).filter(g => Object.hasOwn(TV_GENRE_KEYWORDS, g));
   const recent = new Set(history);
   return items.filter(m => !interactions.some(x => x.media_id === m.id && (x.is_watched || x.preference === "disliked")))
@@ -344,8 +378,11 @@ export function rankItems(result, q, history, interactions, preferences) {
       if (themes.length) explanation = `مثل عنوان مرجع، سراغ «${themes.slice(0, 2).join("» و «")}» می‌ره.`;
       else if (keywords.length) explanation = `برچسب‌های مشترک با عنوان مرجع: ${keywords.slice(0, 2).join("، ")}`;
       else if (shared.length || selected.length || preferred.length) explanation = `ژانر «${labels.genres[(shared[0] ?? selected[0] ?? preferred[0])]}» رو داره.`;
+      const qualitative=semanticPreferences(q);
+      if (qualitative.length) explanation += "\nاز نظر برچسب‌ها یا انتخاب تحریری به «" + qualitative.map(item=>item.label).join("، ") + "» نزدیکه.";
       const taste = m.genres.reduce((sum, tag) => sum + (preferences[tag] ?? 0), 0) / Math.max(1, m.genres.length);
-      const score = 0.15 * quality(m) + (target.length ? 0.35 * overlap(m.genres, target).length / target.length : 0)
+      const score = 0.15 * quality(m) + 0.3 * editorialPreferenceScore(m,q) +
+        (target.length ? 0.35 * overlap(m.genres, target).length / target.length : 0)
         + 0.25 * (taste + 3) / 6 + (reference ? 0.6 * similarity + (related.includes(m.id) ? 0.02 : 0) : 0);
       const verified = !reference && m.media_type === "tv" && keywordGenres.length
         ? (m.verified_genres ?? []).reduce((n, g, i) => n + (keywordGenres.includes(g) ? (i === 0 ? 2 : 1) : 0), 0)

@@ -36,14 +36,27 @@ export async function flowEval(flow,env) {
       bounds:"یه فیلم زیر یک ساعت و نیم اکشن مال قبل از سال ۲۰۰۰ آمریکایی",
       director:"از کارگردان Steven Spielberg یه فیلم اکشن زیر دو ساعت میخوام",
       partial:"یه فیلم علمی تخیلی با پایان خوش",
+      hope:"فیلمی که به آدم امید بده",
+      hope_drama:"فیلمی که به آدم امید بده ژانر درام",
+      hope_followup:"فیلمی که به آدم امید بده",
+      geek:"یه فیلم گیک طوری",
+      technology:"یه فیلم فناورگونه",
+      eerie:"یه فیلم وهم انگیز",
+      teen:"یه سریال تینجری رومانتیک",
     };
     if (!queries[flow]) throw new Error("Unknown flow");
     await input(queries[flow]);
+    if (flow==="hope_followup") await input("ژانر درام");
     if (flow==="partial" && !last()?.text?.includes("نوع پایان")) throw new Error("Ending warning missing");
     const row=await env.BOT_DB.prepare("SELECT document FROM worker_state WHERE user_id=(SELECT id FROM users WHERE telegram_id=?)").bind(actor).first();
     const state=JSON.parse(row?.document ?? "{}");
     if (state.mode!=="interpret") return {flow,pass:false,stage:"interpretation",message:last()?.text};
     expected=state.query;
+    if (["hope","hope_drama","hope_followup"].includes(flow) && !expected.moods?.includes("uplifting")) throw new Error("Hope preference lost");
+    if (["hope_drama","hope_followup"].includes(flow) && !expected.genres?.includes("drama")) throw new Error("Drama preference lost");
+    if (flow==="geek" && !expected.themes?.includes("geek")) throw new Error("Geek preference lost");
+    if (flow==="technology" && !expected.themes?.includes("technology")) throw new Error("Technology preference lost");
+    if (flow==="teen" && (!expected.themes?.includes("teen") || !expected.genres?.includes("romance"))) throw new Error("Teen romance lost");
     if (flow==="bounds" && (expected.release_year_max!==1999 || expected.max_runtime_minutes!==89 || expected.country!=="US")) {
       throw new Error("Lost screenshot constraints");
     }
