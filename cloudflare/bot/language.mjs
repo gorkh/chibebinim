@@ -9,11 +9,12 @@ export const instructions = [
   'For any non-English or shortened person/work name, search_hints may map director_name, director_of, similar_to or dissimilar_to to its likely full English catalog name. Preserve the EXACT original name in filters/evidence. A search hint is an unverified search suggestion, never a fact or a TMDB ID. Omit it if uncertain. Do not guess release years. This applies to ALL names, not a fixed list.',
   'filters contains ONLY explicit conditions. evidence has a verbatim input quote per filter key. Quotes jointly cover ALL meaningful parts of input. ignored contains verbatim filler words (یه، لطفا، بده، میخوام). Never ignore a meaningful condition.',
   'Allowed filters: media_type movie/tv; genres and avoid_genres arrays of action,adventure,animation,comedy,crime,drama,family,fantasy,horror,mystery,romance,science_fiction,thriller,western,documentary,history,music,war; language ISO639-1 ORIGINAL audio; country ISO3166-1 alpha2; release_year_min/max; min_runtime_minutes; max_runtime_minutes; max_episodes; max_seasons; min_rating TMDB. Also director_name (exact user name), director_of (reference film title), similar_to (string), dissimilar_to (string).',
+  'actor_name is a supported string filter for a performer, preserving the exact user spelling. با بازی PERSON, PERSON توش بازی کرده, and از PERSON when the person is primarily an actor use actor_name. A director uses director_name. Keep actor, director, genre, time and country conditions independently. Never put an acting condition in unsupported cast. search_hints may map actor_name to a likely full English name, separately from the original spelling. An actor may be requested in a movie OR TV series.',
   'Qualitative language is supported, not ambiguous or unsupported. moods is an array of uplifting (hopeful, inspirational, امیدبخش, به آدم امید بده), eerie (وهم‌انگیز, وهوانگیز, uncanny), dark, light, intense. themes is an array of teen (تینجری, teenage, نوجوانانه), geek (گیک طوری, nerdy), technology (فناورگونه, technological, هوش مصنوعی), space, friendship. Use these as approximate preferences. ترسناک maps to horror genre; فانتزی to fantasy; رومانتیک/رومانتیک/رمانتیک to romance. Distinguish an eerie atmosphere from explicit horror and never automatically add horror. Genres may be supplied without the word فیلم, e.g. ژانر درام means genres ["drama"]. Quoted evidence for a genre must include ژانر if present. Hopeful does NOT request a guaranteed happy ending. Do not call hopeful plot/ending/other.',
   'Bounds are inclusive. زیر یک ساعت و نیم = max_runtime_minutes 89; قبل از سال ۲۰۰۰ = release_year_max 1999; بعد از ۲۰۱۰ = release_year_min 2011. Exact year sets both min and max. Multiple genres mean all genres. Miniseries implies tv,max_seasons 1. Anime implies animation, do not infer movie/tv. Nationality means country, not language.',
-  'unsupported contains {"kind":"cast|dub|subtitles|ending|age|violence|plot|imdb|other","text":"exact quote"} for EVERY condition unavailable in our catalog. Keep other supported filters. Dub/subtitles language is not original audio. ambiguous contains exact quotes needing clarification, e.g. "امتیاز بالا", "جدید", "ریتم کند". Never invent numeric thresholds. unrelated true only for non movie/TV requests.',
+  'unsupported contains {"kind":"dub|subtitles|ending|age|violence|plot|imdb|other","text":"exact quote"} for EVERY condition unavailable in our catalog. Keep other supported filters. Dub/subtitles language is not original audio. ambiguous contains exact quotes needing clarification, e.g. "امتیاز بالا", "جدید", "ریتم کند". Never invent numeric thresholds. unrelated true only for non movie/TV requests.',
   'Director extraction applies regardless of word order. "از استیون اسپیلبرگ کارگردان" means director_name "استیون اسپیلبرگ". "از کارگردان فیلم Pieta" means director_of "Pieta", not director_name. Preserve genre and duration alongside director. Never infer media_type from a reference title.',
-  'A request "از PERSON ... فیلم" refers to director_name, not director_of. Use director_of ONLY for the director of a named work. A personal name is not a movie title. Extract media_type and genres from the rest of the sentence even when the director clause comes first.',
+  'A request "از PERSON ... فیلم" refers to actor_name for an actor or director_name for a director, never director_of. Use director_of ONLY for the director of a named work. A personal name is not a movie title. Extract media_type and genres from the rest of the sentence even when the person clause comes first.',
   'Input: یه فیلم اکشن قبل از سال ۲۰۰۰',
   'Output: {"filters":{"media_type":"movie","genres":["action"],"release_year_max":1999},"evidence":{"media_type":"فیلم","genres":"اکشن","release_year_max":"قبل از سال ۲۰۰۰"},"unsupported":[],"ambiguous":[],"ignored":["یه"],"unrelated":false}',
   'Input: یه فیلم علمی تخیلی با پایان خوش',
@@ -49,6 +50,9 @@ export function validateInterpretation(value, text) {
     return clarification("invalid_output","نتونستم همهٔ شرط‌ها رو دقیق بررسی کنم. می‌تونی با دکمه‌ها انتخاب کنی.");
   }
   const input = normalizeInput(text);
+  if (value.unsupported.some(item=>item?.kind==="cast")) {
+    return clarification("actor_not_extracted","شرط بازیگر پشتیبانی می‌شه؛ نام بازیگر باید در actor_name استخراج بشه.");
+  }
   const quotes = [];
   const quote = s => {
     if (typeof s !== "string" || !s.trim() || s.length > 600) return false;
@@ -87,6 +91,9 @@ export function validateInterpretation(value, text) {
     if (!explicitType.test(evidence)) return clarification("type_not_grounded","فیلم می‌خوای یا سریال؟ با دکمه‌ها می‌تونی مشخص کنی.");
   }
   const numeric = parse(text);
+  if (/(?:با\s+بازی|توش\s+بازی|بازی\s+کرده|بازیگر)/u.test(input) && !value.filters.actor_name) {
+    return clarification("actor_not_extracted","درخواست دربارهٔ حضور بازیگره؛ نام او باید در actor_name استخراج بشه.");
+  }
   if (numeric && Object.keys(numbers).some(field=>numeric[field] != null && numeric[field] !== value.filters[field])) {
     return clarification("numeric_mismatch","برداشتم از سال، مدت یا امتیاز با جمله‌ات سازگار نبود. شرط عددی رو با دکمه‌ها انتخاب کن.");
   }
@@ -114,7 +121,7 @@ export function validateInterpretation(value, text) {
     }
   }
   const detected = [["dub",/دوبله/u],["subtitles",/زیر\s*نویس/u],["ending",/پایان/u],
-    ["cast",/با\s+بازی/u],["imdb",/imdb/iu],["plot",/درباره/u]];
+    ["imdb",/imdb/iu],["plot",/درباره/u]];
   for (const [kind,pattern] of detected) if (pattern.test(input) && !value.unsupported.some(item=>item.kind===kind)) {
     return clarification("unsupported_omitted","بخشی از شرط‌های درخواستت قابل بررسی نیست. می‌تونی از انتخاب با دکمه استفاده کنی.");
   }
@@ -177,7 +184,7 @@ export async function interpret(ai, text) {
 
 const unsupported = {cast:"بازیگر",dub:"دوبله",subtitles:"زیرنویس",ending:"نوع پایان",
   age:"ردهٔ سنی",violence:"خشونت",plot:"موضوع داستان",imdb:"امتیاز IMDb",other:"شرط دیگری"};
-const names = { director_name:"کارگردان",director_of:"از کارگردان فیلم",similar_to:"شبیه",dissimilar_to:"دور از حال‌وهوای" };
+const names = { actor_name:"بازیگر",director_name:"کارگردان",director_of:"از کارگردان فیلم",similar_to:"شبیه",dissimilar_to:"دور از حال‌وهوای" };
 const numbers = {
   release_year_min:["از سال",1800,2100], release_year_max:["تا سال",1800,2100],
   min_runtime_minutes:["حداقل مدت (دقیقه)",1,10000], max_runtime_minutes:["حداکثر مدت (دقیقه)",1,10000],
@@ -229,6 +236,9 @@ export function validateFilters(value) {
   if (query.min_runtime_minutes > query.max_runtime_minutes || query.release_year_min > query.release_year_max ||
       query.genres?.some(tag => query.avoid_genres?.includes(tag))) return null;
   const director = query.director_name || query.director_of;
+  if (query.actor_name && (query.similar_to || query.dissimilar_to)) {
+    return {message:"فعلاً شرط بازیگر رو همراه ژانر، سال و مدت جست‌وجو می‌کنم. ترکیبش با شباهت به اثر رو هنوز پشتیبانی نمی‌کنم."};
+  }
   if (director && (query.media_type === "tv" || (query.director_name && query.director_of) || query.similar_to || query.dissimilar_to ||
       query.max_seasons || query.max_episodes)) return {message:"فعلاً جست‌وجوی کارگردان رو برای فیلم و بدون شرط شباهت انجام می‌دم."};
   if (director && !query.media_type) {

@@ -167,6 +167,7 @@ class Bot {
       reference_search: Boolean(query.similar_to?.length),
       reference_exclusion: Boolean(query.dissimilar_to),
       director_search: query.director_of ? "by_title" : query.director_name ? "by_name" : null,
+      actor_search:Boolean(query.actor_name),
       follow_up: hint?.director ? "director" : hint?.year ? "year" : chosen ? "button" : null};
     let result;
     try { result = await findCandidates(this.db, this.tmdbKey, query, chosen, hint); }
@@ -179,9 +180,14 @@ class Bot {
       await this.diagnostic("director_unresolved", context);
       return this.send("کارگردان رو با اطمینان پیدا نکردم. اسم انگلیسی‌اش رو بنویس یا بگو «از کارگردان فیلم …».", [options,home]);
     }
+    if (result.actorUnresolved) {
+      await this.diagnostic("actor_unresolved",context);
+      return this.send("بازیگر رو با اطمینان پیدا نکردم. اسم کامل یا یکی از فیلم‌هاش رو مشخص کن.",[options,home]);
+    }
     if (result.peopleChoices) {
       const nonce=key().slice(0,10);
-      await this.setState({mode:"person",nonce,query:result.directorQuery ?? query,choices:result.peopleChoices.map(person=>person.id),
+      await this.setState({mode:"person",nonce,query:result.directorQuery ?? result.personQuery ?? query,choices:result.peopleChoices.map(person=>person.id),
+        personField:result.personField ?? "director_name",
         requestId:this.requestId ?? null});
       await this.diagnostic("person_ambiguous",{...context,choices:result.peopleChoices.length});
       return this.send("این نام‌ها رو در کاتالوگ پیدا کردم. منظورت کدومه؟",
@@ -208,8 +214,9 @@ class Bot {
       this.all("SELECT media_id,preference,is_watched FROM user_media_interactions WHERE user_id=?",this.userId),
       this.first("SELECT genre_weights_json FROM user_preferences WHERE user_id=?",this.userId),
     ]);
-    result.items = result.items.filter(media => matches(media,query));
-    const queue = rankItems(result,query,history.map(r => r.media_id),interactions,JSON.parse(prefs?.genre_weights_json ?? "{}")).slice(0,20);
+    const checkedQuery={...query,_actor_id:result.actorId ?? query._actor_id,_director_id:result.directorId ?? query._director_id};
+    result.items = result.items.filter(media => matches(media,checkedQuery));
+    const queue = rankItems(result,checkedQuery,history.map(r => r.media_id),interactions,JSON.parse(prefs?.genre_weights_json ?? "{}")).slice(0,20);
     const ref = result.reference;
     const resolved = {...context, reference: ref ? {title: ref.title, year: ref.release_date?.slice(0, 4) ?? null} : null};
     if (!queue.length) {
@@ -218,13 +225,13 @@ class Bot {
     }
     const session = key(), rec = key(), item = queue[0];
     if (hint && result.reference) item.explanation = `اثر مرجع: ${mediaLabel(result.reference)}\n${item.explanation}`;
-    const safeQuery = {...query};
+    const safeQuery = {...checkedQuery};
+    delete safeQuery.actor_name;
     delete safeQuery.similar_to;
     delete safeQuery.dissimilar_to;
     delete safeQuery.director_name;
     delete safeQuery.director_of;
     delete safeQuery.search_hints;
-    delete safeQuery._director_id;
     await this.db.batch([
       this.media(item.media),
       this.sql("INSERT INTO recommendation_sessions(id,user_id,request_json,candidates,request_type,current_position,created_at,expires_at) VALUES(?,?,?,?,?,1,?,?)",
@@ -464,7 +471,8 @@ class Bot {
         this.userId,a);
       if (!consumed) return this.send(expired,[options,home]);
       this.requestId=state.requestId;
-      return this.recommend({...state.query,_director_id:state.choices[Number(b)]},"smart");
+      const field=state.personField==="actor_name" ? "_actor_id" : "_director_id";
+      return this.recommend({...state.query,[field]:state.choices[Number(b)]},"smart");
     }
     if (cmd === "remove" && keyPattern.test(a ?? "")) {
       await this.run("DELETE FROM watchlist WHERE user_id=? AND media_id=?",this.userId,a);

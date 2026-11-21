@@ -89,6 +89,8 @@ async function entry(row, kind) {
 }
 
 export function matches(m, q, details = true) {
+  if (q._actor_id && !m.cast_ids?.includes(q._actor_id)) return false;
+  if (q._director_id && !m.director_ids?.includes(q._director_id)) return false;
   if (q.media_type && m.media_type !== q.media_type) return false;
   if (q.language && m.original_language !== q.language) return false;
   if (details && q.country && !m.countries?.includes(q.country)) return false;
@@ -167,7 +169,7 @@ async function clarifyReference(choices, hint, get) {
 }
 
 export async function findCandidates(db, key, q, chosen, hint) {
-  const version = (q.director_name || q.director_of || q.similar_to?.length || q.dissimilar_to) ? "entities-v1" :
+  const version = q.actor_name || q.director_name || q.director_of ? "people-v2" : (q.similar_to?.length || q.dissimilar_to) ? "entities-v1" :
     semanticPreferences(q).length ? "bot-v8" : q.country ? "bot-v7" : "bot-v5";
   const cacheKey = hex(new Uint8Array(await crypto.subtle.digest(
     "SHA-256", encoder.encode(JSON.stringify([version, q, chosen ?? null, hint ?? null])),
@@ -203,6 +205,23 @@ export async function findCandidates(db, key, q, chosen, hint) {
   let excluded;
   let directors = [];
   let recommended = [];
+  let actor;
+  let cast=[];
+  if (q.actor_name) {
+    if (Number.isSafeInteger(q._actor_id) && q._actor_id>0) {
+      const person=await get("person/"+q._actor_id);
+      if (!person.adult && person.id===q._actor_id) actor=person;
+    } else {
+      const resolved=await resolvePerson(get,q.actor_name,q.search_hints?.actor_name,lookupNames("person"),"Acting");
+      if (resolved.peopleChoices) return {peopleChoices:resolved.peopleChoices,personField:"actor_name"};
+      actor=resolved.selected;
+    }
+    if (!actor) return {actorUnresolved:true};
+    const credits=await get("person/"+actor.id+"/combined_credits");
+    cast=(await parallel((credits.cast ?? []).filter(row=>["movie","tv"].includes(row.media_type)),
+      row=>entry(row,row.media_type))).filter(Boolean).map(media=>({...media,cast_ids:[actor.id],cast_match:actor.name}));
+    q={...q,_actor_id:actor.id};
+  }
   if (q.director_name || q.director_of) {
     const directorOf = q.director_of;
     if (directorOf) {
@@ -237,7 +256,7 @@ export async function findCandidates(db, key, q, chosen, hint) {
       if (!person.adult && person.id===q._director_id) directors=[person];
     } else {
       const resolved=await resolvePerson(get,q.director_name,q.search_hints?.director_name,lookupNames("person"));
-      if (resolved.peopleChoices) return {peopleChoices:resolved.peopleChoices};
+      if (resolved.peopleChoices) return {peopleChoices:resolved.peopleChoices,personQuery:q};
       if (!resolved.selected) return {directorUnresolved:true};
       directors=[resolved.selected];
     }
@@ -245,10 +264,17 @@ export async function findCandidates(db, key, q, chosen, hint) {
     const credits = await parallel(directors, p => get(`person/${p.id}/movie_credits`));
     const films = (await parallel(credits.flatMap(r => (r.crew ?? []).filter(m => m.job === "Director")),
       row => entry(row, "movie"))).filter(Boolean);
-    const candidates = distinct(films).filter(m => m.id !== reference?.id && matches(m, q, false))
+    const marked=films.map(media=>({...media,
+      cast_ids:actor && cast.some(item=>item.id===media.id) ? [actor.id] : [],cast_match:actor?.name,
+      director_ids:directors.filter((_,i)=>credits[i].crew?.some(row=>
+        row.job==="Director" && String(row.id)===media.external_id)).map(person=>person.id)}));
+    const candidates = distinct(marked).filter(m => m.id !== reference?.id && matches(m, q, false))
       .sort((a,b) => quality(b) - quality(a)).slice(0, 10);
     const detailed = await parallel(candidates, async m => {
-      try { return await hydrate(m); }
+      try {
+        const details=await hydrate(m);
+        return details ? {...details,cast_ids:m.cast_ids,cast_match:m.cast_match,director_ids:m.director_ids} : null;
+      }
       catch (error) {
         if (!(error instanceof CatalogError)) throw error;
         // The filmography already verified the director.
@@ -259,9 +285,23 @@ export async function findCandidates(db, key, q, chosen, hint) {
       ...m,
       director_match: directors.filter((_, i) => credits[i].crew?.some(row =>
         row.job === "Director" && String(row.id) === m.external_id)).map(p => p.name).join("، "),
+      director_ids:directors.filter((_,i)=>credits[i].crew?.some(row=>
+        row.job==="Director" && String(row.id)===m.external_id)).map(person=>person.id),
     }));
-    const document = { items, related: [] };
+    const document = { items, related: [],actorId:actor?.id,directorId:directors.length===1 ? directors[0].id : null };
     await saveCatalog(db, cacheKey, document);
+    return document;
+  }
+  if (actor) {
+    const candidates=distinct(cast).filter(media=>matches(media,q,false))
+      .sort((a,b)=>quality(b)-quality(a)).slice(0,Math.min(14,get.remaining()));
+    const items=(await parallel(candidates,async media=>{
+      const detailed=await optional(()=>hydrate(media),media);
+      return detailed ? {...detailed,cast_ids:[actor.id],cast_match:actor.name} : null;
+    })).filter(media=>media && matches(media,q));
+    if (!items.length && partialFailures) throw new CatalogError();
+    const document={items,related:[],actorId:actor.id};
+    await saveCatalog(db,cacheKey,document);
     return document;
   }
   if (q.dissimilar_to) {
@@ -398,10 +438,11 @@ export function rankItems(result, q, history, interactions, preferences) {
       const preferred = m.genres.filter(g => preferences[g] > 0);
       const selected = overlap(m.genres, q.genres ?? []);
       let explanation = "این عنوان با شرط‌هایی که انتخاب کردی جور درمیاد.";
-      if (m.director_match) explanation = `کارگردان: ${m.director_match}`;
       if (themes.length) explanation = `مثل عنوان مرجع، سراغ «${themes.slice(0, 2).join("» و «")}» می‌ره.`;
       else if (keywords.length) explanation = `برچسب‌های مشترک با عنوان مرجع: ${keywords.slice(0, 2).join("، ")}`;
       else if (shared.length || selected.length || preferred.length) explanation = `ژانر «${labels.genres[(shared[0] ?? selected[0] ?? preferred[0])]}» رو داره.`;
+      if (m.director_match) explanation += `\nکارگردان: ${m.director_match}`;
+      if (m.cast_match) explanation += "\nبا بازی "+m.cast_match;
       const qualitative=semanticPreferences(q);
       if (qualitative.length) explanation += "\nاز نظر برچسب‌ها یا انتخاب تحریری به «" + qualitative.map(item=>item.label).join("، ") + "» نزدیکه.";
       const taste = m.genres.reduce((sum, tag) => sum + (preferences[tag] ?? 0), 0) / Math.max(1, m.genres.length);

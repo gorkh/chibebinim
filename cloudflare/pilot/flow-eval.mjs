@@ -41,6 +41,10 @@ export async function flowEval(flow,env) {
       celine:"یه فیلم از سلین سیاما",
       reference_fa:"یه فیلم شبیه جدایی نادر از سیمین",
       pieta:"از کارگردان فیلم Pieta",
+      actor:"یه فیلم از تام هاردی",
+      actor_action:"یه فیلم اکشن که تام هاردی توش بازی کرده باشه",
+      actor_tv:"یه سریال با بازی کیت وینسلت",
+      actor_director:"فیلمی از نولان با بازی تام هاردی",
       partial:"یه فیلم علمی تخیلی با پایان خوش",
       hope:"فیلمی که به آدم امید بده",
       hope_drama:"فیلمی که به آدم امید بده ژانر درام",
@@ -63,6 +67,7 @@ export async function flowEval(flow,env) {
     if (flow==="geek" && !expected.themes?.includes("geek")) throw new Error("Geek preference lost");
     if (flow==="technology" && !expected.themes?.includes("technology")) throw new Error("Technology preference lost");
     if (flow==="teen" && (!expected.themes?.includes("teen") || !expected.genres?.includes("romance"))) throw new Error("Teen romance lost");
+    if (flow.startsWith("actor") && !expected.actor_name) throw new Error("Actor condition lost");
     if (flow==="bounds" && (expected.release_year_max!==1999 || expected.max_runtime_minutes!==89 || expected.country!=="US")) {
       throw new Error("Lost screenshot constraints");
     }
@@ -73,9 +78,18 @@ export async function flowEval(flow,env) {
     const people=last()?.reply_markup?.inline_keyboard.flat().filter(b=>b.callback_data?.startsWith("person:")) ?? [];
     if (people.length) {
       const expectedName={director_fa:"Steven Spielberg",ava:"Ava DuVernay",greta:"Greta Gerwig",celine:"Céline Sciamma"}[flow];
-      const person=people.find(b=>b.text.includes(expectedName));
-      if (!person) throw new Error("Expected person not offered: "+expectedName);
+      const pending=await env.BOT_DB.prepare("SELECT document FROM worker_state WHERE user_id=(SELECT id FROM users WHERE telegram_id=?)").bind(actor).first();
+      const actorPerson=JSON.parse(pending.document).personField==="actor_name";
+      const actorExpected=flow==="actor_tv" ? "Kate Winslet" : "Tom Hardy";
+      const targetName=flow.startsWith("actor") ? (actorPerson ? actorExpected : "Christopher Nolan") : expectedName;
+      const person=people.find(b=>b.text.includes(targetName));
+      if (!person) throw new Error("Expected person not offered: "+targetName);
       await input(person.callback_data,true);
+      if (flow==="actor_director" && action("person:")) {
+        const director=last().reply_markup.inline_keyboard.flat().find(b=>b.text.includes("Christopher Nolan"));
+        if (!director) throw new Error("Director choice missing");
+        await input(director.callback_data,true);
+      }
     }
     if (flow==="pieta" && action("ref:")) {
       const option=last().reply_markup.inline_keyboard.flat().find(b=>b.text.includes("۲۰۱۲"));
@@ -84,12 +98,16 @@ export async function flowEval(flow,env) {
     }
   }
   const row=await env.BOT_DB.prepare("SELECT m.metadata_json FROM recommendations r JOIN users u ON u.id=r.user_id JOIN media m ON m.id=r.media_id WHERE u.telegram_id=? ORDER BY r.rowid DESC LIMIT 1").bind(actor).first();
-  if (!row) return {flow,pass:false,stage:"catalog",message:last()?.text};
+  if (!row) return {flow,pass:false,stage:"catalog",query:expected,message:last()?.text};
   const media=JSON.parse(row.metadata_json);
   if (!matches(media,expected)) throw new Error("Displayed media violates filters");
   const expectedDirector={director:"Steven Spielberg",director_fa:"Steven Spielberg",ava:"Ava DuVernay",
     greta:"Greta Gerwig",celine:"Céline Sciamma",pieta:"Kim Ki-duk"}[flow];
   if (expectedDirector && !media.director_match?.includes(expectedDirector)) throw new Error("Director not verified");
+  if (flow.startsWith("actor") && !media.cast_match?.includes(flow==="actor_tv" ? "Kate Winslet" : "Tom Hardy")) {
+    throw new Error("Actor not verified");
+  }
+  if (flow==="actor_director" && !media.director_match?.includes("Christopher Nolan")) throw new Error("Actor/director intersection failed");
   await click("next:");
   const next=await env.BOT_DB.prepare("SELECT m.metadata_json FROM recommendations r JOIN users u ON u.id=r.user_id JOIN media m ON m.id=r.media_id WHERE u.telegram_id=? ORDER BY r.rowid DESC LIMIT 1").bind(actor).first();
   if (next && !matches(JSON.parse(next.metadata_json),expected)) throw new Error("Next media violates filters");

@@ -106,6 +106,26 @@ test("Unknown fields and fabricated evidence cannot execute",()=>{
   assert.equal(validateInterpretation(contract({media_type:"movie",foo:1},{media_type:"فیلم",foo:"اکشن"}),"فیلم اکشن").query,null);
   assert.equal(validateInterpretation(contract({director_name:"Nolan"},{director_name:"نولان"}),"یه فیلم").query,null);
 });
+test("Acting is supported independently of genre and directing",()=>{
+  const result=validateInterpretation(contract({media_type:"movie",genres:["action"],actor_name:"تام هاردی"},
+    {media_type:"فیلم",genres:"اکشن",actor_name:"تام هاردی توش بازی کرده باشه"}),
+    "یه فیلم اکشن که تام هاردی توش بازی کرده باشه");
+  assert.equal(result.status,"understood");
+  assert.deepEqual(result.query.genres,["action"]);
+  assert.equal(result.query.actor_name,"تام هاردی");
+});
+test("An acting request cannot be executed as a directing request",()=>{
+  const result=validateInterpretation(contract({media_type:"movie",director_name:"تام هاردی"},
+    {media_type:"فیلم",director_name:"تام هاردی توش بازی کرده باشه"}),
+    "یه فیلم که تام هاردی توش بازی کرده باشه");
+  assert.equal(result.status,"actor_not_extracted");
+  assert.equal(result.query,null);
+});
+test("Verified actor identities reject unrelated cached candidates",()=>{
+  const query={media_type:"movie",genres:["action"],_actor_id:9};
+  assert.ok(matches({media_type:"movie",genres:["action"],cast_ids:[9]},query));
+  assert.equal(matches({media_type:"movie",genres:["action"],cast_ids:[8]},query),false);
+});
 test("Malformed and failed model outputs recover explicitly",async()=>{
   for (const run of [async()=>({response:"not json"}),async()=>{throw new Error("API unavailable");}]) {
     const result=await interpret({run},"فیلم اکشن");

@@ -305,6 +305,64 @@ try {
   assert.equal(entityCalls.length,beforeReplay);
 } finally {globalThis.fetch=entityFetch;env.AI=defaultAi;}
 await input("/menu");
+const actorFetch=globalThis.fetch;
+env.AI={run:async()=>({response:JSON.stringify(responseFor(
+  {media_type:"movie",genres:["action"],actor_name:"Hardy"},"فیلم اکشن با بازی Hardy")),usage:{neurons:50}})};
+const actorPaths=[];
+globalThis.fetch=async target=>{
+  const path=new URL(target).pathname;
+  actorPaths.push(path);
+  if (path==="/3/search/person" && new URL(target).searchParams.get("query")==="Nolan") {
+    return Response.json({results:[{id:93,name:"Christopher Nolan",known_for_department:"Directing"}]});
+  }
+  if (path==="/3/search/person") return Response.json({results:[
+    {id:91,name:"Tom Hardy",known_for_department:"Acting"},
+    {id:92,name:"Ben Hardy",known_for_department:"Acting"},
+  ]});
+  if (path==="/3/person/91") return Response.json({id:91,name:"Tom Hardy",also_known_as:[]});
+  if (path==="/3/person/92") return Response.json({id:92,name:"Ben Hardy",also_known_as:[]});
+  if (path==="/3/person/93") return Response.json({id:93,name:"Christopher Nolan",also_known_as:[]});
+  if (path==="/3/person/93/movie_credits") return Response.json({crew:[
+    {id:991201,title:"Acted in",release_date:"2010-01-01",genre_ids:[28],job:"Director",vote_count:100},
+    {id:991205,title:"Directed only",release_date:"2010-01-01",genre_ids:[28],job:"Director",vote_count:100},
+  ]});
+  if (path==="/3/person/91/combined_credits") return Response.json({
+    cast:[
+      {id:991201,title:"Acted in",media_type:"movie",release_date:"2010-01-01",genre_ids:[28],vote_count:100},
+      {id:991203,name:"TV only",media_type:"tv",first_air_date:"2010-01-01",genre_ids:[10759],vote_count:100},
+    ],
+    crew:[{id:991202,title:"Only produced",media_type:"movie",release_date:"2010-01-01",genre_ids:[28],job:"Producer",vote_count:100}],
+  });
+  assert.equal(path,"/3/movie/991201");
+  return Response.json({id:991201,title:"Acted in",release_date:"2010-01-01",genres:[{id:28}],runtime:99,
+    vote_count:100,vote_average:7});
+};
+try {
+  await input("فیلم اکشن با بازی Hardy");
+  const choice=last().reply_markup.inline_keyboard.flat().find(b=>b.text.includes("Tom Hardy"));
+  assert.ok(choice);
+  await input(choice.callback_data,true);
+  assert.match(last().caption ?? last().text,/Acted in/);
+  assert.match(last().caption ?? last().text,/Tom Hardy/);
+  assert.ok(!actorPaths.includes("/3/movie/991202"));
+  assert.ok(!actorPaths.includes("/3/tv/991203"));
+  const session=database.prepare("SELECT request_json FROM recommendation_sessions ORDER BY rowid DESC LIMIT 1").get();
+  assert.equal(JSON.parse(session.request_json)._actor_id,91);
+  assert.ok(!session.request_json.includes("Hardy"));
+  env.AI={run:async()=>({response:JSON.stringify(responseFor(
+    {media_type:"movie",genres:["action"],actor_name:"Tom Hardy",director_name:"Nolan"},
+    "فیلم اکشن از Nolan با بازی Tom Hardy")),usage:{neurons:50}})};
+  await input("فیلم اکشن از Nolan با بازی Tom Hardy");
+  const director=last().reply_markup.inline_keyboard.flat().find(b=>b.text.includes("Christopher Nolan"));
+  assert.ok(director);
+  await input(director.callback_data,true);
+  assert.match(last().caption ?? last().text,/Acted in/);
+  assert.ok(!actorPaths.includes("/3/movie/991205"));
+  const combined=database.prepare("SELECT request_json FROM recommendation_sessions ORDER BY rowid DESC LIMIT 1").get();
+  assert.equal(JSON.parse(combined.request_json)._actor_id,91);
+  assert.equal(JSON.parse(combined.request_json)._director_id,93);
+} finally {globalThis.fetch=actorFetch;env.AI=defaultAi;}
+await input("/menu");
 if (process.env.BOT_TEST_AI_ONLY === "1") process.exit(0);
 
 for (const query of ["از کارگردا کیم کی دوک میخوام", "از کارگردان فیلم pieta"]) {

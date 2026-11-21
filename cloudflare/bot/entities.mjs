@@ -3,7 +3,7 @@ const normalize=value=>(value ?? "").normalize("NFKD").replace(/\p{M}/gu,"")
 const distinct=rows=>[...new Map(rows.map(row=>[row.id,row])).values()];
 const names=person=>[person.name,person.original_name,...(person.also_known_as ?? [])];
 export const personMatches=(person,name)=>names(person).some(alias=>normalize(alias)===normalize(name));
-export function personChoices(candidates,name,chosen) {
+export function personChoices(candidates,name,chosen,role="Directing") {
   const valid=distinct(candidates.filter(person=>!person.adult && Number.isSafeInteger(person.id) && person.id>0 && person.name));
   if (chosen) {
     const selected=valid.find(person=>person.id===Number(chosen));
@@ -13,7 +13,7 @@ export function personChoices(candidates,name,chosen) {
   const shortName=normalize(name).split(" ").length===1 && valid.length>1;
   if (exact.length===1 && !shortName) return {selected:exact[0]};
   const choices=(exact.length && !shortName ? exact : valid).sort((a,b)=>
-    Number(b.known_for_department==="Directing")-Number(a.known_for_department==="Directing") ||
+    Number(b.known_for_department===role)-Number(a.known_for_department===role) ||
     (b.popularity ?? 0)-(a.popularity ?? 0)).slice(0,6);
   return choices.length ? {peopleChoices:choices} : {missing:true};
 }
@@ -28,12 +28,12 @@ async function searchVariants(name,hint,search) {
   return distinct(rows);
 }
 
-export async function resolvePerson(get,name,hint,lookupNames) {
+export async function resolvePerson(get,name,hint,lookupNames,role="Directing") {
   let candidates=await searchVariants(name,hint,async query=>{
     const result=await get("search/person",{query,include_adult:"false"});
     return result.results ?? [];
   });
-  const initial=personChoices(candidates,name);
+  const initial=personChoices(candidates,name,undefined,role);
   if (initial.selected) return initial;
   if (lookupNames && /\p{Script=Arabic}/u.test(name)) {
     let published=[];
@@ -46,13 +46,13 @@ export async function resolvePerson(get,name,hint,lookupNames) {
     candidates=distinct([...candidates,...extra.filter(row=>row.status==="fulfilled").flatMap(row=>row.value)]);
     if (!candidates.length && extra.some(row=>row.status==="rejected")) throw extra.find(row=>row.status==="rejected").reason;
   }
-  const expandedChoices=personChoices(candidates,name);
+  const expandedChoices=personChoices(candidates,name,undefined,role);
   if (expandedChoices.selected || !expandedChoices.peopleChoices) return expandedChoices;
   // Use aliases published by the catalog before asking the user to identify a candidate.
   const profiles=await Promise.allSettled(expandedChoices.peopleChoices.slice(0,4).map(person=>get("person/"+person.id)));
   const expanded=expandedChoices.peopleChoices.map((person,index)=>
     profiles[index]?.status==="fulfilled" ? {...person,...profiles[index].value} : person);
-  return personChoices(expanded,name);
+  return personChoices(expanded,name,undefined,role);
 }
 
 export async function resolveTitles(search,name,hint,kind,lookupNames) {

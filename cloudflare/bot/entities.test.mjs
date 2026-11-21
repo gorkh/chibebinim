@@ -33,6 +33,13 @@ test("Foreign original names and Unicode accents match catalog names",()=>{
 test("A person is not discarded because their best-known job is acting",()=>{
   assert.equal(personChoices([{id:5,name:"Greta Gerwig",known_for_department:"Acting"}],"Greta Gerwig").selected.id,5);
 });
+test("Acting requests rank acting identities before directing identities",()=>{
+  const result=personChoices([
+    {id:20,name:"Tom Example",known_for_department:"Directing"},
+    {id:21,name:"Tom Example",known_for_department:"Acting"},
+  ],"Tom Example",undefined,"Acting");
+  assert.equal(result.peopleChoices[0].id,21);
+});
 test("Search both the original name and a hint, then verify published aliases",async()=>{
   const searched=[];
   const get=async(path,params)=>{
