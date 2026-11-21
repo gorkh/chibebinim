@@ -34,4 +34,10 @@ export const cases = [
   ["یه فیلم فناورگونه", {media_type:"movie",themes:["technology"]}],
   ["یه فیلم ترسناک فانتزی", {media_type:"movie",genres:["horror","fantasy"],all_genres:true}],
   ["فیلمی که به آدم امید بده ژانر درام", {media_type:"movie",moods:["uplifting"],genres:["drama"]}],
+  ["یه فیلم علمی تخیلی از اسپیلبرگ", {media_type:"movie",genres:["science_fiction"],director_name:"اسپیلبرگ"}],
+  ["از ایوا دوورنی یه فیلم درام بده", {media_type:"movie",genres:["drama"],director_name:"ایوا دوورنی"}],
+  ["یه فیلم از گیلرمو دل تورو", {media_type:"movie",director_name:"گیلرمو دل تورو"}],
+  ["یه فیلم از گرتا گرویگ", {media_type:"movie",director_name:"گرتا گرویگ"}],
+  ["یه فیلم از سلین سیاما", {media_type:"movie",director_name:"سلین سیاما"}],
+  ["یه فیلم شبیه جدایی نادر از سیمین", {media_type:"movie",similar_to:"جدایی نادر از سیمین"}],
 ];

@@ -18,6 +18,7 @@ export default {
     const [input,expected]=cases[index];
     const result=await interpret(env.AI,input);
     const actual={...(result.query ?? result.parsed_filters)};
+    delete actual.search_hints;
     if (actual.similar_to) actual.similar_to=actual.similar_to[0];
     if (result.unsupported?.length) actual.unsupported=result.unsupported;
     if (result.status==="unrelated") actual.unrelated=true;

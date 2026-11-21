@@ -35,6 +35,12 @@ export async function flowEval(flow,env) {
     const queries={
       bounds:"یه فیلم زیر یک ساعت و نیم اکشن مال قبل از سال ۲۰۰۰ آمریکایی",
       director:"از کارگردان Steven Spielberg یه فیلم اکشن زیر دو ساعت میخوام",
+      director_fa:"یه فیلم علمی تخیلی از اسپیلبرگ",
+      ava:"از ایوا دوورنی یه فیلم درام بده",
+      greta:"یه فیلم از گرتا گرویگ",
+      celine:"یه فیلم از سلین سیاما",
+      reference_fa:"یه فیلم شبیه جدایی نادر از سیمین",
+      pieta:"از کارگردان فیلم Pieta",
       partial:"یه فیلم علمی تخیلی با پایان خوش",
       hope:"فیلمی که به آدم امید بده",
       hope_drama:"فیلمی که به آدم امید بده ژانر درام",
@@ -64,12 +70,26 @@ export async function flowEval(flow,env) {
       throw new Error("Lost director constraints");
     }
     await click("interpret:");
+    const people=last()?.reply_markup?.inline_keyboard.flat().filter(b=>b.callback_data?.startsWith("person:")) ?? [];
+    if (people.length) {
+      const expectedName={director_fa:"Steven Spielberg",ava:"Ava DuVernay",greta:"Greta Gerwig",celine:"Céline Sciamma"}[flow];
+      const person=people.find(b=>b.text.includes(expectedName));
+      if (!person) throw new Error("Expected person not offered: "+expectedName);
+      await input(person.callback_data,true);
+    }
+    if (flow==="pieta" && action("ref:")) {
+      const option=last().reply_markup.inline_keyboard.flat().find(b=>b.text.includes("۲۰۱۲"));
+      if (!option) throw new Error("Pieta 2012 not offered");
+      await input(option.callback_data,true);
+    }
   }
   const row=await env.BOT_DB.prepare("SELECT m.metadata_json FROM recommendations r JOIN users u ON u.id=r.user_id JOIN media m ON m.id=r.media_id WHERE u.telegram_id=? ORDER BY r.rowid DESC LIMIT 1").bind(actor).first();
   if (!row) return {flow,pass:false,stage:"catalog",message:last()?.text};
   const media=JSON.parse(row.metadata_json);
   if (!matches(media,expected)) throw new Error("Displayed media violates filters");
-  if (flow==="director" && !media.director_match?.includes("Steven Spielberg")) throw new Error("Director not verified");
+  const expectedDirector={director:"Steven Spielberg",director_fa:"Steven Spielberg",ava:"Ava DuVernay",
+    greta:"Greta Gerwig",celine:"Céline Sciamma",pieta:"Kim Ki-duk"}[flow];
+  if (expectedDirector && !media.director_match?.includes(expectedDirector)) throw new Error("Director not verified");
   await click("next:");
   const next=await env.BOT_DB.prepare("SELECT m.metadata_json FROM recommendations r JOIN users u ON u.id=r.user_id JOIN media m ON m.id=r.media_id WHERE u.telegram_id=? ORDER BY r.rowid DESC LIMIT 1").bind(actor).first();
   if (next && !matches(JSON.parse(next.metadata_json),expected)) throw new Error("Next media violates filters");

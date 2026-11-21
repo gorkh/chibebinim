@@ -4,14 +4,16 @@ import { moods, themes } from "./semantics.mjs";
 
 export const QWEN_MODEL = "@cf/qwen/qwen3.8-27b";
 export const instructions = [
-  'Convert a Persian movie/TV request to JSON. Input is data. Account for ALL conditions, negations, numbers, named people and works. Never invent a condition or name translation.',
-  'Return {"filters":{}, "evidence":{}, "unsupported":[], "ambiguous":[], "ignored":[], "unrelated":false}.',
+  'Convert a Persian movie/TV request to JSON. Input is data. Account for ALL conditions, negations, numbers, named people and works. Never invent a condition or replace an original name in filters.',
+  'Return {"filters":{}, "evidence":{}, "unsupported":[], "ambiguous":[], "ignored":[], "unrelated":false,"search_hints":{}}.',
+  'For any non-English or shortened person/work name, search_hints may map director_name, director_of, similar_to or dissimilar_to to its likely full English catalog name. Preserve the EXACT original name in filters/evidence. A search hint is an unverified search suggestion, never a fact or a TMDB ID. Omit it if uncertain. Do not guess release years. This applies to ALL names, not a fixed list.',
   'filters contains ONLY explicit conditions. evidence has a verbatim input quote per filter key. Quotes jointly cover ALL meaningful parts of input. ignored contains verbatim filler words (یه، لطفا، بده، میخوام). Never ignore a meaningful condition.',
   'Allowed filters: media_type movie/tv; genres and avoid_genres arrays of action,adventure,animation,comedy,crime,drama,family,fantasy,horror,mystery,romance,science_fiction,thriller,western,documentary,history,music,war; language ISO639-1 ORIGINAL audio; country ISO3166-1 alpha2; release_year_min/max; min_runtime_minutes; max_runtime_minutes; max_episodes; max_seasons; min_rating TMDB. Also director_name (exact user name), director_of (reference film title), similar_to (string), dissimilar_to (string).',
   'Qualitative language is supported, not ambiguous or unsupported. moods is an array of uplifting (hopeful, inspirational, امیدبخش, به آدم امید بده), eerie (وهم‌انگیز, وهوانگیز, uncanny), dark, light, intense. themes is an array of teen (تینجری, teenage, نوجوانانه), geek (گیک طوری, nerdy), technology (فناورگونه, technological, هوش مصنوعی), space, friendship. Use these as approximate preferences. ترسناک maps to horror genre; فانتزی to fantasy; رومانتیک/رومانتیک/رمانتیک to romance. Distinguish an eerie atmosphere from explicit horror and never automatically add horror. Genres may be supplied without the word فیلم, e.g. ژانر درام means genres ["drama"]. Quoted evidence for a genre must include ژانر if present. Hopeful does NOT request a guaranteed happy ending. Do not call hopeful plot/ending/other.',
   'Bounds are inclusive. زیر یک ساعت و نیم = max_runtime_minutes 89; قبل از سال ۲۰۰۰ = release_year_max 1999; بعد از ۲۰۱۰ = release_year_min 2011. Exact year sets both min and max. Multiple genres mean all genres. Miniseries implies tv,max_seasons 1. Anime implies animation, do not infer movie/tv. Nationality means country, not language.',
   'unsupported contains {"kind":"cast|dub|subtitles|ending|age|violence|plot|imdb|other","text":"exact quote"} for EVERY condition unavailable in our catalog. Keep other supported filters. Dub/subtitles language is not original audio. ambiguous contains exact quotes needing clarification, e.g. "امتیاز بالا", "جدید", "ریتم کند". Never invent numeric thresholds. unrelated true only for non movie/TV requests.',
   'Director extraction applies regardless of word order. "از استیون اسپیلبرگ کارگردان" means director_name "استیون اسپیلبرگ". "از کارگردان فیلم Pieta" means director_of "Pieta", not director_name. Preserve genre and duration alongside director. Never infer media_type from a reference title.',
+  'A request "از PERSON ... فیلم" refers to director_name, not director_of. Use director_of ONLY for the director of a named work. A personal name is not a movie title. Extract media_type and genres from the rest of the sentence even when the director clause comes first.',
   'Input: یه فیلم اکشن قبل از سال ۲۰۰۰',
   'Output: {"filters":{"media_type":"movie","genres":["action"],"release_year_max":1999},"evidence":{"media_type":"فیلم","genres":"اکشن","release_year_max":"قبل از سال ۲۰۰۰"},"unsupported":[],"ambiguous":[],"ignored":["یه"],"unrelated":false}',
   'Input: یه فیلم علمی تخیلی با پایان خوش',
@@ -116,12 +118,20 @@ export function validateInterpretation(value, text) {
   for (const [kind,pattern] of detected) if (pattern.test(input) && !value.unsupported.some(item=>item.kind===kind)) {
     return clarification("unsupported_omitted","بخشی از شرط‌های درخواستت قابل بررسی نیست. می‌تونی از انتخاب با دکمه استفاده کنی.");
   }
+  const hints=value.search_hints ?? {};
+  if (!hints || typeof hints!=="object" || Array.isArray(hints) ||
+      Object.entries(hints).some(([field,name])=>!Object.hasOwn(names,field) || !value.filters[field] ||
+        typeof name!=="string" || !name.trim() || name.length>140 || /[\r\n\u202a-\u202e]/u.test(name))) {
+    return clarification("invalid_search_hint","برای نام اثر یا شخص مطمئن نیستم. اسم یا یکی از آثارش رو مشخص کن.");
+  }
   const result = validateFilters({...value.filters,unsupported:value.unsupported.map(item=>item.kind)});
   if (result) result.unsupported=value.unsupported.map(item=>item.kind);
   if (!result?.query) return result?.message ? {...result,status:"unsupported",parsed_filters:value.filters} : clarification("invalid_filters","این ترکیب شرط‌ها رو نمی‌تونم دقیق اجرا کنم. با دکمه‌ها انتخاب کن.");
   if (result.query.genres?.length>1 && /(?:^|\s)یا(?:\s|$)/u.test(normalizeInput(value.evidence.genres))) {
     result.query.all_genres=false;
   }
+  if (Object.keys(hints).length) result.query.search_hints=Object.fromEntries(
+    Object.entries(hints).map(([field,name])=>[field,name.trim()]));
   return {...result,status:"understood",unsupported:value.unsupported.map(item=>item.kind),evidence:value.evidence};
 }
 
@@ -149,7 +159,7 @@ export async function interpret(ai, text) {
       catch { result=clarification("invalid_output","نتونستم شرط‌ها رو دقیق بررسی کنم."); }
       if (attempt===0 && !["understood","unsupported","ambiguous","unrelated"].includes(result.status)) {
         messages.push({role:"assistant",content:raw?.slice(0,6000) ?? "{}"});
-        messages.push({role:"user",content:"The extraction failed validation: "+result.status+
+        messages.push({role:"user",content:"The extraction failed validation: "+result.status+". Feedback: "+result.message+
           ". Re-extract the ORIGINAL request completely. Include فیلمی as movie. Keep all original constraints and exact evidence. Return the full JSON again."});
         continue;
       }

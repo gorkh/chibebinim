@@ -1,6 +1,8 @@
 import labels from "./labels.json" with { type: "json" };
 import fixture from "../../app/catalog.json" with { type: "json" };
 import { preferences as semanticPreferences, semanticTags, matchesPreferences, editorialPreferenceScore } from "./semantics.mjs";
+import { resolvePerson, resolveTitles } from "./entities.mjs";
+import { knowledgeNames } from "./knowledge.mjs";
 
 const MOVIE_IDS = Object.fromEntries(Object.entries(labels.movie_genres).filter(([id]) => +id < 10759));
 const namespace = Uint8Array.from("6ba7b8119dad11d180b400c04fd430c8".match(/../g), (b) => parseInt(b, 16));
@@ -165,13 +167,26 @@ async function clarifyReference(choices, hint, get) {
 }
 
 export async function findCandidates(db, key, q, chosen, hint) {
-  const version = semanticPreferences(q).length ? "bot-v8" : q.country ? "bot-v7" : q.dissimilar_to || franchiseFor(q.similar_to?.[0]) ? "bot-v6" : "bot-v5";
+  const version = (q.director_name || q.director_of || q.similar_to?.length || q.dissimilar_to) ? "entities-v1" :
+    semanticPreferences(q).length ? "bot-v8" : q.country ? "bot-v7" : "bot-v5";
   const cacheKey = hex(new Uint8Array(await crypto.subtle.digest(
     "SHA-256", encoder.encode(JSON.stringify([version, q, chosen ?? null, hint ?? null])),
   )));
   const cache = await db.prepare("SELECT document FROM worker_catalog WHERE key=? AND expires_at>unixepoch()").bind(cacheKey).first();
   if (cache) return JSON.parse(cache.document);
   const get = tmdb(key);
+  const lookupNames=kind=>async name=>{
+    const digest=hex(new Uint8Array(await crypto.subtle.digest("SHA-256",encoder.encode(kind+":"+normalizeTitle(name)))));
+    const key="entity-names:"+digest;
+    const cached=await db.prepare("SELECT document FROM worker_catalog WHERE key=? AND expires_at>unixepoch()").bind(key).first();
+    if (cached) return JSON.parse(cached.document);
+    try {
+      const names=await knowledgeNames(name,kind);
+      await db.prepare("INSERT INTO worker_catalog(key,document,expires_at) VALUES(?,?,unixepoch()+86400) ON CONFLICT(key) DO UPDATE SET document=excluded.document,expires_at=excluded.expires_at")
+        .bind(key,JSON.stringify(names)).run();
+      return names;
+    } catch { throw new CatalogError(); }
+  };
   let partialFailures=0;
   const optional=async (operation,fallback)=>{
     try { return await operation(); }
@@ -182,24 +197,31 @@ export async function findCandidates(db, key, q, chosen, hint) {
     }
   };
   const results = async (res, kind) => (await parallel(res.results ?? [], item => entry(item, kind))).filter(Boolean);
-  const search = async (name, kind) => results(await get(`search/${kind}`, { query: name, include_adult: "false" }), kind);
+  const search = async (name, kind) => results(await get(`search/${kind}`, { query: name, include_adult: "false", language:/[\u0600-\u06ff]/u.test(name) ? "fa-IR" : "en-US" }), kind);
   const hydrate = (m) => get(`${m.media_type}/${m.external_id}`, { append_to_response: "translations,keywords" }).then(item => entry(item, m.media_type));
   let reference;
   let excluded;
   let directors = [];
   let recommended = [];
   if (q.director_name || q.director_of) {
-    const koreanAlias = q.director_name && /^کیم\s*کی\s*دو[کگ]$/u.test(normalizeTitle(q.director_name));
     const directorOf = q.director_of;
     if (directorOf) {
       const [, name, releaseYear] = directorOf.match(/^(.+?)(?:\s+\(?((?:18|19|20)\d\d)\)?)?$/u);
       const canonical = canonicalTitle(name);
       const kind = q.director_reference_type ?? "movie";
-      const preferredYear = releaseYear ?? (kind === "movie" && normalizeTitle(name) === "pieta" ? "2012" : null);
-      const options = (await search(canonical, kind))
-        .filter(m => (exact(m, name) || exact(m, canonical)) && (!releaseYear || year(m) === Number(releaseYear)));
-      const preferred = preferredYear && !chosen && !hint ? options.filter(m => year(m) === Number(preferredYear)) : [];
-      const resolved = referenceChoices(preferred.length === 1 ? preferred : options, {}, name, canonical, chosen);
+      const options = (await resolveTitles(search,canonical,q.search_hints?.director_of,kind,lookupNames(kind)))
+        .filter(m => !releaseYear || year(m) === Number(releaseYear));
+      if (!options.some(m=>exact(m,name) || exact(m,canonical))) {
+        const person=await resolvePerson(get,name,q.search_hints?.director_of,lookupNames("person"));
+        const choices=person.peopleChoices ?? (person.selected ? [person.selected] : []);
+        if (choices.length) {
+          const directorQuery={...q,director_name:name,search_hints:{director_name:q.search_hints?.director_of}};
+          delete directorQuery.director_of;
+          delete directorQuery.director_reference_type;
+          return {peopleChoices:choices,directorQuery};
+        }
+      }
+      const resolved = referenceChoices(options, {}, name, canonical, chosen);
       let { selected } = resolved;
       if (hint && resolved.choices) {
         const matching = await clarifyReference(resolved.choices, hint, get);
@@ -210,14 +232,14 @@ export async function findCandidates(db, key, q, chosen, hint) {
       reference = selected;
       const credits = await get(`${kind}/${selected.external_id}/credits`);
       directors = (credits.crew ?? []).filter(p => p.job === "Director" && Number.isSafeInteger(p.id)).slice(0, 4);
-    } else if (koreanAlias) {
-      // This Persian spelling refers to the director of Pieta (2012).
-      directors = [{ id: 1188, name: "Kim Ki-duk" }];
+    } else if (Number.isSafeInteger(q._director_id) && q._director_id>0) {
+      const person=await get("person/"+q._director_id);
+      if (!person.adult && person.id===q._director_id) directors=[person];
     } else {
-      const {results: people = []} = await get("search/person", { query: q.director_name, include_adult: "false" });
-      directors = people.filter(p => !p.adult && Number.isSafeInteger(p.id) && p.known_for_department === "Directing" &&
-        [p.name, p.original_name].some(name => normalizeTitle(name) === normalizeTitle(q.director_name)));
-      if (directors.length !== 1) return { directorUnresolved: true };
+      const resolved=await resolvePerson(get,q.director_name,q.search_hints?.director_name,lookupNames("person"));
+      if (resolved.peopleChoices) return {peopleChoices:resolved.peopleChoices};
+      if (!resolved.selected) return {directorUnresolved:true};
+      directors=[resolved.selected];
     }
     if (!directors.length) return { directorUnresolved: true };
     const credits = await parallel(directors, p => get(`person/${p.id}/movie_credits`));
@@ -247,19 +269,21 @@ export async function findCandidates(db, key, q, chosen, hint) {
     const franchise = franchiseFor(name);
     const canonical = franchise?.title ?? canonicalTitle(name);
     const kinds = franchise ? [franchise.kind] : ["movie", "tv"];
-    const options = (await Promise.all(kinds.map(kind => search(canonical, kind)))).flat()
-      .filter(m => exact(m, canonical) && (!releaseYear || year(m) === Number(releaseYear)));
+    const options = (await Promise.all(kinds.map(kind => resolveTitles(search,canonical,q.search_hints?.dissimilar_to,kind,lookupNames(kind))))).flat()
+      .filter(m => !releaseYear || year(m) === Number(releaseYear));
     const pool = !franchise && q.media_type && options.some(m => m.media_type === q.media_type)
       ? options.filter(m => m.media_type === q.media_type) : options;
-    if (pool.length !== 1) return { exclusionUnresolved: true };
-    excluded = await hydrate(pool[0]) ?? pool[0];
+    const resolved=referenceChoices(pool,{},name,canonical,chosen);
+    if (resolved.choices) return resolved;
+    if (!resolved.selected) return {exclusionUnresolved:true};
+    excluded = await hydrate(resolved.selected) ?? resolved.selected;
     excluded.franchise = franchise;
   }
   if (q.similar_to?.length) {
     const parts = q.similar_to[0].match(/^(.+?)(?:\s+\(?((?:19|20)\d\d)\)?)?$/u);
     const name = parts[1];
     const canonical = franchiseFor(name)?.title ?? canonicalTitle(name);
-    const options = distinct((await Promise.all(["tv", "movie"].map(kind => search(canonical, kind)))).flat())
+    const options = distinct((await Promise.all(["tv", "movie"].map(kind => resolveTitles(search,canonical,q.search_hints?.similar_to,kind,lookupNames(kind))))).flat())
       .filter(m => !parts[2] || year(m) === Number(parts[2]));
     const resolved = referenceChoices(options, q, name, canonical, chosen);
     let { selected } = resolved;

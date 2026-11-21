@@ -41,6 +41,7 @@ const db = {
 const realFetch = globalThis.fetch;
 globalThis.fetch = (...args) => {
   const url = new URL(args[0]);
+  if (url.hostname==="www.wikidata.org") return realFetch(...args);
   assert.equal(url.hostname, "api.themoviedb.org");
   tmdbCalls++;
   const [target, init] = args;
@@ -72,7 +73,10 @@ const defaultAi = {run:async (_model,{messages}) => {
   if ((filters.director_name || filters.director_of) && !text.includes("فیلم")) delete filters.media_type;
   if (filters.similar_to) filters.similar_to=filters.similar_to[0];
   delete filters.all_genres;
-  return {response:JSON.stringify(responseFor(filters,text)),usage:{neurons:50}};
+  const contract=responseFor(filters,text);
+  // Synthetic model fixture; production name resolution has no per-person mapping.
+  if (filters.director_name==="کیم کی دوک") contract.search_hints={director_name:"Kim Ki-duk"};
+  return {response:JSON.stringify(contract),usage:{neurons:50}};
 }};
 const env = { BOT_DB: db, TMDB_READ_TOKEN: token, WEBHOOK_SECRET: "local-only",AI:defaultAi,
   USER_AI_LIMIT:{limit:async()=>({success:true})} };
@@ -267,11 +271,51 @@ assert.equal(database.prepare("SELECT count(*) AS n FROM analytics_events WHERE 
 env.AI=defaultAi;
 autoConfirm=true;
 await input("/menu");
+autoConfirm=true;
+env.AI={run:async()=>({response:JSON.stringify(responseFor(
+  {media_type:"movie",genres:["drama"],director_name:"Coppola"},"فیلم درام از کارگردان Coppola")),usage:{neurons:50}})};
+const entityFetch=globalThis.fetch;
+const entityCalls=[];
+globalThis.fetch=async target=>{
+  const path=new URL(target).pathname;
+  entityCalls.push(path);
+  if (path==="/3/search/person") return Response.json({results:[
+    {id:81,name:"Sofia Coppola",known_for_department:"Directing",known_for:[{title:"Lost in Translation"}]},
+    {id:82,name:"Francis Ford Coppola",known_for_department:"Directing",known_for:[{title:"The Godfather"}]},
+  ]});
+  if (path==="/3/person/81") return Response.json({id:81,name:"Sofia Coppola",also_known_as:[]});
+  if (path==="/3/person/82") return Response.json({id:82,name:"Francis Ford Coppola",also_known_as:[]});
+  if (path==="/3/person/81/movie_credits") return Response.json({crew:[
+    {id:991101,title:"Movie by Sofia",release_date:"2003-01-01",genre_ids:[18],job:"Director",vote_count:100},
+    {id:991102,title:"Only acted in",release_date:"2003-01-01",genre_ids:[18],job:"Actor",vote_count:100},
+  ]});
+  assert.equal(path,"/3/movie/991101");
+  return Response.json({id:991101,title:"Movie by Sofia",release_date:"2003-01-01",genres:[{id:18}],
+    runtime:95,production_countries:[{iso_3166_1:"US"}],vote_count:100,vote_average:7});
+};
+try {
+  await input("فیلم درام از کارگردان Coppola");
+  const choice=last().reply_markup.inline_keyboard.flat().find(b=>b.text.includes("Sofia Coppola"));
+  assert.ok(choice);
+  await input(choice.callback_data,true);
+  assert.match(last().caption ?? last().text,/Movie by Sofia/);
+  assert.doesNotMatch(last().caption ?? last().text,/Only acted in/);
+  const beforeReplay=entityCalls.length;
+  await input(choice.callback_data,true);
+  assert.equal(entityCalls.length,beforeReplay);
+} finally {globalThis.fetch=entityFetch;env.AI=defaultAi;}
+await input("/menu");
 if (process.env.BOT_TEST_AI_ONLY === "1") process.exit(0);
 
 for (const query of ["از کارگردا کیم کی دوک میخوام", "از کارگردان فیلم pieta"]) {
   await input("smart", true);
   const search = await input(query);
+  const person=last().reply_markup?.inline_keyboard?.flat().find(b=>
+    b.callback_data?.startsWith("person:") && /Kim Ki[ -]duk/i.test(b.text));
+  if (person) await input(person.callback_data,true);
+  const reference=last().reply_markup?.inline_keyboard?.flat().find(b=>
+    b.callback_data?.startsWith("ref:") && b.text.includes("۲۰۱۲"));
+  if (reference) await input(reference.callback_data,true);
   assert.match(last().caption ?? last().text, /Kim Ki[ -]duk/i);
   const session = database.prepare("SELECT candidates, request_json FROM recommendation_sessions ORDER BY rowid DESC LIMIT 1").get();
   const queue = JSON.parse(session.candidates);

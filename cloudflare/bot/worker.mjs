@@ -1,6 +1,7 @@
 import { CatalogError, findCandidates, matches, rankItems } from "./catalog.mjs";
 import { parseReferenceReply } from "./parse.mjs";
 import { interpret, instructions, continueRequest } from "./language.mjs";
+import { personLabel } from "./entities.mjs";
 import logo from "./tmdb-logo.mjs";
 import { button, cardButtons, cardText, ccloudDownload, clarify, escape, expired, fa, genres, home,
   mediaLabel, menu, options, quick, referenceLabel, settings, ui, unavailable } from "./ui.mjs";
@@ -178,6 +179,14 @@ class Bot {
       await this.diagnostic("director_unresolved", context);
       return this.send("کارگردان رو با اطمینان پیدا نکردم. اسم انگلیسی‌اش رو بنویس یا بگو «از کارگردان فیلم …».", [options,home]);
     }
+    if (result.peopleChoices) {
+      const nonce=key().slice(0,10);
+      await this.setState({mode:"person",nonce,query:result.directorQuery ?? query,choices:result.peopleChoices.map(person=>person.id),
+        requestId:this.requestId ?? null});
+      await this.diagnostic("person_ambiguous",{...context,choices:result.peopleChoices.length});
+      return this.send("این نام‌ها رو در کاتالوگ پیدا کردم. منظورت کدومه؟",
+        [...result.peopleChoices.map((person,index)=>[button(personLabel(person),"person:"+nonce+":"+index)]),home]);
+    }
     if (result.exclusionUnresolved) {
       await this.diagnostic("exclusion_reference_unresolved", context);
       return this.send("مطمئن نشدم کدوم اثر رو می‌خوای کنار بذاری. همون درخواست رو با اسم کامل اثر یا سال ساختش بفرست.", [options,home]);
@@ -214,6 +223,8 @@ class Bot {
     delete safeQuery.dissimilar_to;
     delete safeQuery.director_name;
     delete safeQuery.director_of;
+    delete safeQuery.search_hints;
+    delete safeQuery._director_id;
     await this.db.batch([
       this.media(item.media),
       this.sql("INSERT INTO recommendation_sessions(id,user_id,request_json,candidates,request_type,current_position,created_at,expires_at) VALUES(?,?,?,?,?,1,?,?)",
@@ -447,6 +458,13 @@ class Bot {
     if (cmd === "ref" && state.mode === "ref" && a === state.nonce && /^\d$/.test(b ?? "") && state.choices[Number(b)]) {
       this.requestId=state.requestId;
       return this.recommend(state.query,"smart",state.choices[Number(b)]);
+    }
+    if (cmd === "person" && state.mode==="person" && a===state.nonce && /^\d$/.test(b ?? "") && state.choices[Number(b)]) {
+      const consumed=await this.first("DELETE FROM worker_state WHERE user_id=? AND json_extract(document,'$.nonce')=? RETURNING user_id",
+        this.userId,a);
+      if (!consumed) return this.send(expired,[options,home]);
+      this.requestId=state.requestId;
+      return this.recommend({...state.query,_director_id:state.choices[Number(b)]},"smart");
     }
     if (cmd === "remove" && keyPattern.test(a ?? "")) {
       await this.run("DELETE FROM watchlist WHERE user_id=? AND media_id=?",this.userId,a);
