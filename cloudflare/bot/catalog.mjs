@@ -41,6 +41,27 @@ const franchiseReferences = [
 const franchiseFor = name => franchiseReferences.find(f => f.aliases.some(a => normalizeTitle(a) === normalizeTitle(name)));
 const canonicalTitle = name => fixture.find(m => m.aliases?.some(alias => normalizeTitle(alias) === normalizeTitle(name)))?.title ?? name;
 
+// Collection identity is authoritative. Title families cover numbered continuations,
+// remakes and TV spin-offs with the same distinctive title, without genre matching.
+const familyTitle = title => normalizeTitle((title ?? "").split(/[:：]|\s+[–—]\s+/u)[0])
+  .replace(/\s+(?:(?:part|chapter|season|volume|vol|قسمت|فصل)\s+)?(?:\d+|[ivx]+)$/u, "").trim();
+const distinctive = title => {
+  const words=title.split(" ").filter(word=>!["the","a","an","of","and","in","on","to"].includes(word));
+  return words.length>=2 || (words.length===1 && words[0].length>=5);
+};
+export function sameSeries(media, reference) {
+  if (!reference) return false;
+  if (media.id===reference.id) return true;
+  if (reference.collection_id && media.collection_id===reference.collection_id) return true;
+  const names=item=>[item.title,item.original_title].filter(Boolean);
+  return names(media).some(left=>names(reference).some(right=>{
+    const a=normalizeTitle(left), b=normalizeTitle(right);
+    if (a===b) return true;
+    const x=familyTitle(left), y=familyTitle(right);
+    return x===y && distinctive(x);
+  }));
+}
+
 export function resemblesExcluded(m, ref) {
   if (m.id === ref.id || (ref.collection_id && m.collection_id === ref.collection_id)) return true;
   const keywords = tags => (tags ?? []).map(normalizeTitle).filter(tag => !generic.has(tag) &&
@@ -169,7 +190,7 @@ async function clarifyReference(choices, hint, get) {
 }
 
 export async function findCandidates(db, key, q, chosen, hint) {
-  const version = q.actor_name || q.director_name || q.director_of ? "people-v2" : (q.similar_to?.length || q.dissimilar_to) ? "entities-v1" :
+  const version = q.actor_name || q.director_name || q.director_of ? "people-v2" : (q.similar_to?.length || q.dissimilar_to) ? "series-v2" :
     semanticPreferences(q).length ? "bot-v8" : q.country ? "bot-v7" : "bot-v5";
   const cacheKey = hex(new Uint8Array(await crypto.subtle.digest(
     "SHA-256", encoder.encode(JSON.stringify([version, q, chosen ?? null, hint ?? null])),
@@ -399,14 +420,14 @@ export async function findCandidates(db, key, q, chosen, hint) {
   const broad = (await Promise.all((q.media_type ? [q.media_type] : ["tv", "movie"]).map(discover))).flat()
     .filter(m => matches(m, q, false)).sort((a,b) =>
       Number(matches(b, q)) - Number(matches(a, q)) || quality(b) - quality(a)).slice(0, 12);
-  const candidates = distinct([...recommended, ...broad]).filter(m => m.id !== reference?.id &&
+  const candidates = distinct([...recommended, ...broad]).filter(m => !sameSeries(m,reference) &&
       (!excluded || (m.id !== excluded.id && !excluded.franchise?.relatedTitles.test(normalizeTitle(m.title)))))
     .slice(0, Math.min(26, get.remaining()));
   const items = (await parallel(candidates,async media=>{
     const hydrated=await optional(()=>hydrate(media),null);
     // A seed can still satisfy all requested constraints using official search metadata.
     return hydrated ?? (semanticPreferences(q).length && matches(media,q) ? media : null);
-  })).filter(m => m && matches(m, q) && (!excluded || !resemblesExcluded(m, excluded)));
+  })).filter(m => m && !sameSeries(m,reference) && matches(m, q) && (!excluded || !resemblesExcluded(m, excluded)));
   if (!items.length && partialFailures) throw new CatalogError();
   const document = { items, reference, related: recommended.map(m => m.id) };
   await saveCatalog(db, cacheKey, document);
@@ -425,7 +446,7 @@ export function rankItems(result, q, history, interactions, preferences) {
   const target = [...new Set([...(q.genres ?? []), ...(moodGenres[q.mood] ?? [])])];
   const keywordGenres = (q.genres ?? []).filter(g => Object.hasOwn(TV_GENRE_KEYWORDS, g));
   const recent = new Set(history);
-  return items.filter(m => !interactions.some(x => x.media_id === m.id && (x.is_watched || x.preference === "disliked")))
+  return items.filter(m => !sameSeries(m,reference) && !interactions.some(x => x.media_id === m.id && (x.is_watched || x.preference === "disliked")))
     .map(m => {
       const shared = overlap(m.genres, reference?.genres ?? []);
       const themes = overlap(m.themes, reference?.themes ?? []);
